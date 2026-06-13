@@ -1,0 +1,544 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>Face Registration Tool — FaceAttend</title>
+  <script src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.13/dist/face-api.js"></script>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:'Inter',-apple-system,sans-serif;background:#0d1117;color:#e6edf3;min-height:100vh;padding:24px}
+    h1{color:#fff;font-size:1.4rem;margin-bottom:4px}
+    .sub{color:#8b949e;font-size:.875rem;margin-bottom:24px}
+    .grid{display:grid;grid-template-columns:1fr 1fr;gap:20px;max-width:1000px}
+    .card{background:#161b22;border:1px solid #30363d;border-radius:12px;padding:20px}
+    h2{color:#fff;font-size:1rem;font-weight:600;margin-bottom:14px}
+    label{font-size:.78rem;font-weight:600;color:#8b949e;text-transform:uppercase;letter-spacing:.7px;display:block;margin-bottom:6px}
+    select,input{width:100%;background:#0d1117;border:1px solid #30363d;border-radius:8px;padding:9px 13px;color:#e6edf3;font-family:inherit;font-size:.9rem;outline:none;margin-bottom:12px}
+    select:focus,input:focus{border-color:#58a6ff;box-shadow:0 0 0 3px rgba(88,166,255,.1)}
+    .btn{width:100%;padding:11px;border-radius:8px;border:none;font-weight:700;font-size:.9rem;cursor:pointer;transition:all .2s;font-family:inherit;margin-bottom:8px}
+    .btn-green{background:#238636;color:#fff}
+    .btn-green:hover{background:#2ea043}
+    .btn-blue{background:#1f6feb;color:#fff}
+    .btn-blue:hover{background:#388bfd}
+    .btn-red{background:#da3633;color:#fff}
+    .btn-red:hover{background:#f85149}
+    .btn-grey{background:#21262d;color:#e6edf3;border:1px solid #30363d}
+    .btn-grey:hover{background:#2d333b}
+    .btn:disabled{opacity:.4;cursor:not-allowed}
+    .cam-wrap{position:relative;width:100%;aspect-ratio:4/3;background:#000;border-radius:10px;overflow:hidden;border:1.5px solid #30363d;margin-bottom:12px}
+    .cam-wrap video{width:100%;height:100%;object-fit:cover;display:block}
+    .cam-wrap canvas{position:absolute;top:0;left:0;width:100%;height:100%}
+    .cam-bar{position:absolute;bottom:0;left:0;right:0;background:rgba(13,17,23,.9);padding:8px 12px;font-size:.78rem;font-weight:500;color:#58a6ff;display:flex;align-items:center;gap:7px}
+    .dot{width:7px;height:7px;border-radius:50%;background:#3fb950;animation:blink 1s infinite;flex-shrink:0}
+    @keyframes blink{0%,100%{opacity:1}50%{opacity:.2}}
+    .scan-line{position:absolute;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,#58a6ff,transparent);box-shadow:0 0 8px #58a6ff;animation:scan 2.2s ease-in-out infinite;z-index:3}
+    @keyframes scan{0%{top:0%}50%{top:91%}100%{top:0%}}
+    .status{padding:10px 14px;border-radius:8px;font-size:.84rem;font-weight:500;margin-bottom:10px;border:1px solid}
+    .status.info{background:rgba(88,166,255,.08);border-color:rgba(88,166,255,.3);color:#79c0ff}
+    .status.ok{background:rgba(63,185,80,.08);border-color:rgba(63,185,80,.3);color:#56d364}
+    .status.warn{background:rgba(210,153,34,.08);border-color:rgba(210,153,34,.3);color:#e3b341}
+    .status.err{background:rgba(248,81,73,.08);border-color:rgba(248,81,73,.3);color:#ff7b72}
+    .dots-row{display:flex;gap:4px;margin-bottom:10px}
+    .sdot{width:32px;height:10px;border-radius:4px;background:#21262d;transition:background .3s}
+    .sdot.done{background:#3fb950}
+    .sdot.curr{background:#e3b341}
+    .sdot.fail{background:#f85149}
+    .prog-lbl{font-size:.78rem;color:#8b949e;margin-bottom:6px}
+    .students-list{margin-top:10px}
+    .s-row{display:flex;align-items:center;gap:10px;padding:10px;background:#0d1117;border:1px solid #21262d;border-radius:8px;margin-bottom:6px;font-size:.84rem}
+    .s-reg{margin-left:auto;font-size:.72rem;font-weight:700;padding:3px 8px;border-radius:20px}
+    .s-reg.yes{background:rgba(63,185,80,.12);color:#56d364;border:1px solid rgba(63,185,80,.3)}
+    .s-reg.no{background:rgba(210,153,34,.12);color:#e3b341;border:1px solid rgba(210,153,34,.3)}
+    .log{background:#0d1117;border:1px solid #21262d;border-radius:8px;padding:12px;font-family:'JetBrains Mono',monospace;font-size:.75rem;color:#8b949e;max-height:200px;overflow-y:auto;margin-top:10px;white-space:pre-wrap}
+    .log .ok{color:#56d364} .log .err{color:#ff7b72} .log .info{color:#79c0ff}
+    @media(max-width:700px){.grid{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+
+<h1>🔬 FaceAttend — Face Registration & Test Tool</h1>
+<p class="sub">Register student faces accurately and test recognition. Use this if faces are not being recognised correctly.</p>
+
+<div class="grid">
+
+  <!-- LEFT: Register -->
+  <div>
+    <div class="card" style="margin-bottom:16px">
+      <h2>① Register a Student Face</h2>
+
+      <label>Admin credentials (to save face)</label>
+      <input id="email" type="email" placeholder="admin@faceattend.com" value="admin@faceattend.com"/>
+      <input id="pass"  type="password" placeholder="Admin@123" value="Admin@123"/>
+
+      <label>Select Student</label>
+      <select id="student-select">
+        <option value="">— Load students first —</option>
+      </select>
+
+      <button class="btn btn-blue" id="load-btn" onclick="loadStudents()">🔄 Load Students from Database</button>
+
+      <div id="reg-status" class="status info" style="display:none"></div>
+
+      <!-- Camera -->
+      <div class="cam-wrap" id="cam-wrap" style="display:none">
+        <video id="reg-video" autoplay muted playsinline></video>
+        <canvas id="reg-canvas"></canvas>
+        <div class="scan-line"></div>
+        <div class="cam-bar"><div class="dot"></div><span id="cam-txt">Camera starting…</span></div>
+      </div>
+
+      <!-- Sample dots -->
+      <div id="prog-wrap" style="display:none">
+        <div class="prog-lbl">Capture progress: <span id="prog-txt">0/7 samples</span></div>
+        <div class="dots-row" id="dots-row"></div>
+      </div>
+
+      <button class="btn btn-green" id="open-btn" onclick="openCam()" style="display:none">📷 Open Camera</button>
+      <button class="btn btn-green" id="capture-btn" onclick="captureNow()" style="display:none" disabled>📸 Start 7-Sample Capture</button>
+      <button class="btn btn-grey"  id="stop-btn"    onclick="stopCam()"    style="display:none">■ Stop Camera</button>
+    </div>
+  </div>
+
+  <!-- RIGHT: Test + Students -->
+  <div>
+    <div class="card" style="margin-bottom:16px">
+      <h2>② Test Face Recognition</h2>
+      <div id="test-status" class="status info">Load students and open camera to test.</div>
+
+      <div class="cam-wrap" id="test-wrap" style="display:none">
+        <video id="test-video" autoplay muted playsinline></video>
+        <canvas id="test-canvas"></canvas>
+        <div class="scan-line"></div>
+        <div class="cam-bar"><div class="dot"></div><span id="test-cam-txt">Camera starting…</span></div>
+      </div>
+
+      <button class="btn btn-blue" id="test-open-btn" onclick="openTestCam()">📷 Open Test Camera</button>
+      <button class="btn btn-green" id="test-btn" onclick="testRecognise()" style="display:none" disabled>🔍 Recognise Face Now</button>
+      <button class="btn btn-grey"  id="test-stop-btn" onclick="stopTestCam()" style="display:none">■ Stop</button>
+
+      <div id="result-box" style="display:none;margin-top:12px;padding:14px;border-radius:8px;border:1px solid #30363d;background:#0d1117">
+        <div style="font-weight:700;color:#fff;margin-bottom:8px" id="result-name">—</div>
+        <div style="font-size:.82rem;color:#8b949e" id="result-detail">—</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>③ Registered Students</h2>
+      <div id="students-list" class="students-list">
+        <p style="color:#8b949e;font-size:.84rem">Click "Load Students" to see status</p>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div class="card" style="max-width:1000px;margin-top:16px">
+  <h2>📋 Console Log</h2>
+  <div class="log" id="log">Waiting…</div>
+</div>
+
+<script>
+const BASE = "http://localhost:5000/api";
+const MODEL_URL = "https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.13/model";
+
+let adminToken  = null;
+let students    = [];
+let regStream   = null;
+let testStream  = null;
+let liveTimer   = null;
+let testTimer   = null;
+let matcher     = null;
+let cache       = [];
+let capturing   = false;
+
+function log(msg, type) {
+  const el  = document.getElementById("log");
+  const cls = type || "info";
+  const time = new Date().toTimeString().slice(0,8);
+  el.innerHTML += `<span class="${cls}">[${time}] ${msg}</span>\n`;
+  el.scrollTop = el.scrollHeight;
+}
+
+function setStatus(id, msg, type) {
+  const el = document.getElementById(id);
+  el.textContent  = msg;
+  el.className    = "status " + (type || "info");
+  el.style.display = "block";
+}
+
+function $(id) { return document.getElementById(id); }
+
+// ── Load AI Models ───────────────────────────────
+async function loadModels() {
+  log("Loading AI models…");
+  try {
+    await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
+    log("tinyFaceDetector ✅");
+    await faceapi.nets.faceLandmark68TinyNet.loadFromUri(MODEL_URL);
+    log("faceLandmark68TinyNet ✅");
+    await faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL);
+    log("faceRecognitionNet ✅");
+    log("All models ready!", "ok");
+    return true;
+  } catch(e) {
+    log("Model load FAILED: " + e.message, "err");
+    return false;
+  }
+}
+
+// ── Admin Login ──────────────────────────────────
+async function getAdminToken() {
+  const email = $("email").value.trim();
+  const pass  = $("pass").value.trim();
+  const res   = await fetch(BASE + "/auth/admin/login", {
+    method:"POST", headers:{"Content-Type":"application/json"},
+    body: JSON.stringify({ email, password: pass })
+  });
+  const data = await res.json();
+  if (!res.ok || !data.token) throw new Error(data.message || "Login failed");
+  log("Admin logged in: " + data.admin.name, "ok");
+  return data.token;
+}
+
+// ── Load Students ────────────────────────────────
+async function loadStudents() {
+  $("load-btn").disabled = true;
+  $("load-btn").textContent = "Loading…";
+  try {
+    // Get token
+    adminToken = await getAdminToken();
+
+    // Load students
+    const res  = await fetch(BASE + "/students", { headers:{ Authorization: "Bearer " + adminToken } });
+    const data = await res.json();
+    students   = data.students || [];
+    log("Loaded " + students.length + " students", "ok");
+
+    // Populate dropdown
+    const sel = $("student-select");
+    sel.innerHTML = "<option value=''>— Select student —</option>" +
+      students.map(s =>
+        `<option value="${s._id}" data-roll="${s.rollNumber}" data-name="${s.name}">${s.name} (${s.rollNumber}) ${s.isRegistered?"✅":""}</option>`
+      ).join("");
+
+    // Show students list
+    $("students-list").innerHTML = students.map(s =>
+      `<div class="s-row">
+        <div>
+          <div style="font-weight:600;color:#fff">${s.name}</div>
+          <div style="font-size:.75rem;color:#8b949e;font-family:'JetBrains Mono',monospace">${s.rollNumber}</div>
+        </div>
+        <span class="s-reg ${s.isRegistered?"yes":"no"}">${s.isRegistered?"✅ Registered":"⏳ Not registered"}</span>
+      </div>`
+    ).join("");
+
+    // Load face descriptors for matching
+    const fdRes  = await fetch(BASE + "/students/face-descriptors");
+    const fdData = await fdRes.json();
+    cache = (fdData.descriptors || []).filter(d => d.descriptor && d.descriptor.length === 128);
+    log("Face descriptors loaded: " + cache.length, cache.length ? "ok" : "warn");
+
+    if (cache.length > 0) {
+      const labeled = cache.map(d =>
+        new faceapi.LabeledFaceDescriptors(d.rollNumber, [new Float32Array(d.descriptor)])
+      );
+      matcher = new faceapi.FaceMatcher(labeled, 0.45);
+      log("Matcher built with " + cache.length + " faces, threshold 0.45", "ok");
+    }
+
+    $("open-btn").style.display    = "block";
+    $("load-btn").textContent      = "🔄 Reload Students";
+    $("load-btn").disabled         = false;
+    $("test-btn").disabled         = false;
+  } catch(e) {
+    log("ERROR: " + e.message, "err");
+    $("load-btn").textContent = "🔄 Load Students";
+    $("load-btn").disabled    = false;
+  }
+}
+
+// ── Registration Camera ──────────────────────────
+async function openCam() {
+  const sel = $("student-select");
+  const opt = sel.options[sel.selectedIndex];
+  if (!opt || !opt.value) { alert("Select a student first!"); return; }
+
+  setStatus("reg-status", "Opening camera…", "info");
+  $("cam-wrap").style.display = "block";
+  $("open-btn").style.display = "none";
+  $("capture-btn").style.display = "block";
+  $("stop-btn").style.display    = "block";
+
+  try {
+    regStream = await navigator.mediaDevices.getUserMedia({
+      video:{ width:{ideal:640}, height:{ideal:480}, facingMode:"user" }
+    });
+    const vid = $("reg-video");
+    vid.srcObject = regStream;
+    await new Promise((ok, fail) => {
+      const t = setTimeout(() => fail(new Error("timeout")), 10000);
+      vid.onloadedmetadata = () => vid.play().then(() => { clearTimeout(t); setTimeout(ok, 500); }).catch(fail);
+    });
+    $("cam-txt").textContent = "Camera ready — face the camera directly";
+    $("capture-btn").disabled = false;
+    setStatus("reg-status", "✅ Camera ready. Click Capture when your face is clearly visible.", "ok");
+
+    // Start live boxes
+    if (liveTimer) clearInterval(liveTimer);
+    liveTimer = setInterval(async () => {
+      if (capturing || !regStream) return;
+      if (vid.readyState < 2 || vid.videoWidth === 0) return;
+      try {
+        const dets = await faceapi.detectAllFaces(vid, new faceapi.TinyFaceDetectorOptions({inputSize:320,scoreThreshold:0.4}));
+        const c    = $("reg-canvas");
+        faceapi.matchDimensions(c, {width:vid.videoWidth,height:vid.videoHeight});
+        const ctx  = c.getContext("2d");
+        ctx.clearRect(0,0,c.width,c.height);
+        faceapi.resizeResults(dets,{width:vid.videoWidth,height:vid.videoHeight}).forEach(d => {
+          const {x,y,width,height} = d.box;
+          const col = d.score>.75?"#3fb950":d.score>.5?"#58a6ff":"#e3b341";
+          ctx.strokeStyle=col; ctx.lineWidth=2.5; ctx.shadowColor=col; ctx.shadowBlur=8;
+          ctx.strokeRect(x,y,width,height); ctx.shadowBlur=0;
+        });
+        const n = dets.length;
+        $("cam-txt").textContent = n > 0 ? n+" face(s) detected — ready to capture!" : "No face — look at camera";
+        $("cam-wrap").style.borderColor = n > 0 ? "rgba(63,185,80,.7)" : "#30363d";
+      } catch(e) {}
+    }, 400);
+  } catch(e) {
+    log("Camera error: " + e.message, "err");
+    setStatus("reg-status", "❌ Camera denied. Allow camera permission.", "err");
+  }
+}
+
+function stopCam() {
+  if (liveTimer) { clearInterval(liveTimer); liveTimer = null; }
+  if (regStream) { regStream.getTracks().forEach(t=>t.stop()); regStream = null; }
+  $("cam-wrap").style.display    = "none";
+  $("capture-btn").style.display = "none";
+  $("stop-btn").style.display    = "none";
+  $("open-btn").style.display    = "block";
+  $("prog-wrap").style.display   = "none";
+}
+
+// ── 7-Sample Capture ─────────────────────────────
+async function captureNow() {
+  const sel  = $("student-select");
+  const opt  = sel.options[sel.selectedIndex];
+  const roll = opt && opt.dataset && opt.dataset.roll;
+  const name = opt && opt.dataset && opt.dataset.name;
+  if (!roll) { alert("Select a student!"); return; }
+
+  capturing = true;
+  $("capture-btn").disabled = true;
+
+  const TOTAL   = 7;
+  const samples = [];
+  let bestPhoto = null, bestScore = 0;
+
+  $("prog-wrap").style.display = "block";
+  $("dots-row").innerHTML = Array.from({length:TOTAL}, (_,i) =>
+    `<div class="sdot" id="sdot-${i}"></div>`
+  ).join("");
+
+  log("Starting 7-sample capture for: " + name + " (" + roll + ")");
+
+  for (let i = 0; i < TOTAL; i++) {
+    const dot = $(`sdot-${i}`);
+    dot.className = "sdot curr";
+    $("prog-txt").textContent = `${i+1}/${TOTAL} samples`;
+    setStatus("reg-status", `📸 Sample ${i+1}/${TOTAL} — stay still, look straight`, "info");
+
+    try {
+      const vid = $("reg-video");
+      const det = await faceapi
+        .detectSingleFace(vid, new faceapi.TinyFaceDetectorOptions({inputSize:512,scoreThreshold:0.45}))
+        .withFaceLandmarks(true)
+        .withFaceDescriptor();
+
+      if (det && det.detection.score > 0.5) {
+        samples.push({d: det.descriptor, score: det.detection.score});
+        dot.className = "sdot done";
+        log(`Sample ${i+1} ✅ score: ${det.detection.score.toFixed(3)}`, "ok");
+        if (det.detection.score > bestScore) {
+          bestScore = det.detection.score;
+          const c = document.createElement("canvas");
+          c.width = vid.videoWidth||640; c.height = vid.videoHeight||480;
+          c.getContext("2d").drawImage(vid, 0, 0);
+          bestPhoto = c.toDataURL("image/jpeg", 0.88);
+        }
+      } else {
+        dot.className = "sdot fail";
+        log(`Sample ${i+1} ❌ no face / low quality`, "warn");
+      }
+    } catch(e) {
+      $(`sdot-${i}`).className = "sdot fail";
+      log(`Sample ${i+1} error: ${e.message}`, "err");
+    }
+    await new Promise(r => setTimeout(r, 400));
+  }
+
+  log(`Captured ${samples.length} of ${TOTAL} samples`);
+
+  if (samples.length < 2) {
+    setStatus("reg-status", `❌ Only ${samples.length} samples. Need at least 2. Check lighting.`, "err");
+    capturing = false;
+    $("capture-btn").disabled = false;
+    return;
+  }
+
+  // Average best 5
+  samples.sort((a,b) => b.score - a.score);
+  const kept = samples.slice(0, Math.min(5, samples.length));
+  const avg  = new Float32Array(128);
+  for (let i = 0; i < 128; i++) {
+    avg[i] = kept.reduce((s,x) => s + x.d[i], 0) / kept.length;
+  }
+  log(`Averaged ${kept.length} best samples into descriptor`, "ok");
+
+  // Save to database
+  try {
+    setStatus("reg-status", "💾 Saving to database…", "info");
+    const res = await fetch(BASE + "/students/register-face", {
+      method: "POST",
+      headers: { "Content-Type":"application/json", "Authorization":"Bearer "+adminToken },
+      body: JSON.stringify({ rollNumber:roll, descriptor:Array.from(avg), photoBase64:bestPhoto })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message);
+    const quality = Math.round(bestScore * 100);
+    setStatus("reg-status", `✅ REGISTERED! ${kept.length}/${TOTAL} samples, ${quality}% quality`, "ok");
+    log(`✅ Registered ${name} (${roll}) — ${kept.length} samples, ${quality}% quality`, "ok");
+    await loadStudents(); // refresh
+  } catch(e) {
+    setStatus("reg-status", "❌ Save failed: " + e.message, "err");
+    log("Save error: " + e.message, "err");
+  }
+
+  capturing = false;
+  $("capture-btn").disabled = false;
+}
+
+// ── Test Recognition ─────────────────────────────
+async function openTestCam() {
+  $("test-wrap").style.display    = "block";
+  $("test-btn").style.display     = "block";
+  $("test-stop-btn").style.display = "block";
+  $("test-open-btn").style.display = "none";
+
+  try {
+    testStream = await navigator.mediaDevices.getUserMedia({
+      video:{ width:{ideal:640}, height:{ideal:480}, facingMode:"user" }
+    });
+    const vid = $("test-video");
+    vid.srcObject = testStream;
+    await new Promise((ok,fail) => {
+      const t = setTimeout(()=>fail(new Error("timeout")),10000);
+      vid.onloadedmetadata = () => vid.play().then(()=>{clearTimeout(t);setTimeout(ok,500);}).catch(fail);
+    });
+    $("test-cam-txt").textContent = "Camera ready — click Recognise";
+
+    // Live boxes
+    if (testTimer) clearInterval(testTimer);
+    testTimer = setInterval(async () => {
+      if (!testStream) return;
+      const vid = $("test-video");
+      if (vid.readyState < 2 || vid.videoWidth === 0) return;
+      try {
+        const dets = await faceapi.detectAllFaces(vid, new faceapi.TinyFaceDetectorOptions({inputSize:320,scoreThreshold:0.4}));
+        const c    = $("test-canvas");
+        faceapi.matchDimensions(c,{width:vid.videoWidth,height:vid.videoHeight});
+        const ctx = c.getContext("2d"); ctx.clearRect(0,0,c.width,c.height);
+        faceapi.resizeResults(dets,{width:vid.videoWidth,height:vid.videoHeight}).forEach(d=>{
+          const {x,y,width,height}=d.box;
+          const col=d.score>.75?"#3fb950":d.score>.5?"#58a6ff":"#e3b341";
+          ctx.strokeStyle=col;ctx.lineWidth=2.5;ctx.shadowColor=col;ctx.shadowBlur=8;ctx.strokeRect(x,y,width,height);ctx.shadowBlur=0;
+        });
+        $("test-cam-txt").textContent = dets.length > 0 ? dets.length+" face(s) — click Recognise" : "No face";
+      } catch(e) {}
+    }, 400);
+  } catch(e) {
+    setStatus("test-status","❌ Camera denied.","err");
+  }
+}
+
+function stopTestCam() {
+  if (testTimer) { clearInterval(testTimer); testTimer = null; }
+  if (testStream) { testStream.getTracks().forEach(t=>t.stop()); testStream = null; }
+  $("test-wrap").style.display     = "none";
+  $("test-btn").style.display      = "none";
+  $("test-stop-btn").style.display = "none";
+  $("test-open-btn").style.display = "block";
+}
+
+async function testRecognise() {
+  if (!matcher) { setStatus("test-status","Load students first!","warn"); return; }
+  $("test-btn").disabled = true;
+  $("test-btn").textContent = "Analysing…";
+
+  try {
+    const vid = $("test-video");
+    const det = await faceapi
+      .detectSingleFace(vid, new faceapi.TinyFaceDetectorOptions({inputSize:416,scoreThreshold:0.5}))
+      .withFaceLandmarks(true)
+      .withFaceDescriptor();
+
+    if (!det) {
+      setStatus("test-status","❌ No face detected. Look directly at camera.","err");
+      log("No face detected", "err");
+      return;
+    }
+
+    log("Face detected, score: " + det.detection.score.toFixed(3));
+
+    // Check distance to every person
+    let bestDist=Infinity, bestPerson=null, secondDist=Infinity;
+    for (const person of cache) {
+      const dist = faceapi.euclideanDistance(det.descriptor, new Float32Array(person.descriptor));
+      log(`→ ${person.rollNumber} ${person.name}: dist=${dist.toFixed(4)}`, dist < 0.45 ? "ok" : "info");
+      if (dist < bestDist) { secondDist=bestDist; bestDist=dist; bestPerson=person; }
+      else if (dist < secondDist) secondDist=dist;
+    }
+
+    const margin = secondDist - bestDist;
+    const conf   = Math.round((1-bestDist)*100);
+    const ok     = bestDist < 0.45 && margin > 0.05;
+
+    log(`Best: ${bestPerson.rollNumber} | dist=${bestDist.toFixed(4)} | margin=${margin.toFixed(4)} | recognised=${ok}`, ok?"ok":"warn");
+
+    const box = $("result-box");
+    box.style.display = "block";
+    box.style.borderColor = ok ? "rgba(63,185,80,.5)" : "rgba(248,81,73,.5)";
+    box.style.background  = ok ? "rgba(63,185,80,.06)" : "rgba(248,81,73,.06)";
+
+    if (ok) {
+      $("result-name").textContent   = "✅ " + bestPerson.name;
+      $("result-detail").textContent = `Roll: ${bestPerson.rollNumber} | Confidence: ${conf}% | Distance: ${bestDist.toFixed(3)} | Margin: ${margin.toFixed(3)}`;
+      setStatus("test-status", "✅ Recognised: " + bestPerson.name + " (" + conf + "%)", "ok");
+    } else {
+      $("result-name").textContent   = "❌ Not recognised";
+      $("result-detail").textContent = `Closest: ${bestPerson.rollNumber} ${bestPerson.name} | dist=${bestDist.toFixed(3)} (need < 0.45) | margin=${margin.toFixed(3)} (need > 0.05)`;
+      setStatus("test-status", "❌ Face not recognised. Re-register with better lighting.", "err");
+    }
+  } catch(e) {
+    log("Test error: "+e.message,"err");
+    setStatus("test-status","Error: "+e.message,"err");
+  }
+
+  $("test-btn").disabled    = false;
+  $("test-btn").textContent = "🔍 Recognise Face Now";
+}
+
+// ── Init ─────────────────────────────────────────
+(async () => {
+  log("Loading AI models…");
+  const ok = await loadModels();
+  if (ok) {
+    setStatus("test-status","✅ AI ready. Load students to begin.","ok");
+    $("test-btn").disabled = false;
+  }
+})();
+</script>
+</body>
+</html>

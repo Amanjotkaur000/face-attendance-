@@ -1,0 +1,664 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>Dashboard — FaceAttend</title>
+  <link rel="stylesheet" href="../css/globals.css"/>
+  <link rel="stylesheet" href="../css/dashboard.css"/>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.13/dist/face-api.js"></script>
+</head>
+<body>
+<div id="toast-container"></div>
+<div id="page-loader">
+  <div class="ld-ring"></div>
+  <div class="ld-text" id="ld-text">Loading AI models…</div>
+</div>
+
+<!-- Navbar -->
+<nav class="navbar">
+  <div class="nav-logo">
+    <div class="nav-logo-icon">🎓</div>
+    Face<span>Attend</span>
+  </div>
+  <div class="nav-right">
+    <div class="nav-user">
+      <div class="nav-avatar" id="nav-avatar">?</div>
+      <span id="nav-name">Student</span>
+    </div>
+    <button class="btn btn-outline btn-sm" onclick="doLogout()">Sign out</button>
+  </div>
+</nav>
+
+<!-- Sidebar -->
+<aside class="sidebar">
+  <div class="sidebar-section">
+    <div class="sidebar-label">Navigation</div>
+    <a class="sidebar-link active" href="#" onclick="showTab('home')"><span class="si">🏠</span>Dashboard</a>
+    <a class="sidebar-link" href="#" onclick="showTab('mark')"><span class="si">📸</span>Mark Attendance</a>
+    <a class="sidebar-link" href="#" onclick="showTab('graph')"><span class="si">📊</span>Graphs & Stats</a>
+    <a class="sidebar-link" href="#" onclick="showTab('history')"><span class="si">📋</span>My Records</a>
+  </div>
+</aside>
+
+<!-- Main -->
+<div class="main-wrap">
+<div class="page-body">
+
+  <!-- ═══ HOME ═══ -->
+  <div id="tab-home">
+    <div class="page-title">
+      <h1>Good day, <span id="dash-name" style="color:var(--accent)">—</span> 👋</h1>
+      <p class="subtitle" id="dash-date">—</p>
+    </div>
+
+    <!-- Profile Banner -->
+    <div class="profile-banner">
+      <div id="profile-photo"></div>
+      <div class="profile-info">
+        <h3 id="pf-name">—</h3>
+        <p class="profile-sub" id="pf-sub">—</p>
+        <div class="profile-badges">
+          <span class="badge badge-blue" id="pf-roll">—</span>
+          <span class="badge badge-purple" id="pf-sem">—</span>
+          <span id="pf-face-badge"></span>
+        </div>
+      </div>
+      <div style="margin-left:auto;text-align:right">
+        <div style="font-size:0.75rem;color:var(--fg-muted);margin-bottom:6px">Today's Status</div>
+        <div id="today-status-big" style="font-size:1.5rem;font-weight:700">—</div>
+      </div>
+    </div>
+
+    <!-- Info tiles -->
+    <div class="info-grid">
+      <div class="info-tile hl-blue">
+        <div class="it-label">Today</div>
+        <div class="it-val" id="t-today">—</div>
+      </div>
+      <div class="info-tile">
+        <div class="it-label">Present Days</div>
+        <div class="it-val" id="t-present">—</div>
+      </div>
+      <div class="info-tile">
+        <div class="it-label">Absent Days</div>
+        <div class="it-val" id="t-absent">—</div>
+      </div>
+      <div class="info-tile hl-green">
+        <div class="it-label">Attendance %</div>
+        <div class="it-val" id="t-pct">—</div>
+      </div>
+    </div>
+
+    <!-- Quick attendance card -->
+    <div class="attend-card">
+      <div class="attend-card-head">
+        <div>
+          <h3>📸 Mark Today's Attendance</h3>
+          <p>Your face will be matched against your registered photo in the database.</p>
+        </div>
+        <span class="badge badge-amber" id="ai-badge">⏳ Loading AI…</span>
+      </div>
+      <div class="attend-card-body">
+        <div id="today-pill-wrap"></div>
+        <button class="btn-attend" id="launch-btn" onclick="openCam()" disabled>
+          <span style="font-size:1.3rem">📷</span>
+          Launch Face Scanner
+        </button>
+      </div>
+    </div>
+
+    <!-- Mini charts -->
+    <div class="charts-grid">
+      <div class="chart-card">
+        <div class="chart-title">Last 30 Days</div>
+        <div class="chart-sub">Daily presence — filled bar = present</div>
+        <canvas id="mini-bar" height="140"></canvas>
+      </div>
+      <div class="chart-card">
+        <div class="chart-title">Weekly Trend</div>
+        <div class="chart-sub">Days present per week</div>
+        <canvas id="mini-line" height="140"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ MARK ATTENDANCE ═══ -->
+  <div id="tab-mark" class="hidden">
+    <div class="page-title">
+      <h2>📸 Mark Attendance</h2>
+      <p class="subtitle">Face scanner matches your face against your stored photo.</p>
+    </div>
+    <div class="attend-card" style="max-width:560px">
+      <div class="attend-card-head">
+        <div>
+          <h3>Face Recognition Scanner</h3>
+          <p>Ensure good lighting. Look directly at the camera.</p>
+        </div>
+        <span class="badge badge-amber" id="ai-badge2">⏳ Loading AI…</span>
+      </div>
+      <div class="attend-card-body">
+        <div id="today-pill-wrap2"></div>
+        <button class="btn-attend" id="launch-btn2" onclick="openCam()" disabled>
+          <span style="font-size:1.3rem">📷</span>
+          Launch Face Scanner
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ GRAPHS ═══ -->
+  <div id="tab-graph" class="hidden">
+    <div class="page-title">
+      <h2>📊 Attendance Analytics</h2>
+      <p class="subtitle">Your attendance visualised over time</p>
+    </div>
+
+    <!-- Stats row -->
+    <div class="stats-grid" style="margin-bottom:24px">
+      <div class="stat-card">
+        <div class="stat-icon green">✅</div>
+        <div class="stat-val" id="g-present">—</div>
+        <div class="stat-label">Present (30 days)</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon red">❌</div>
+        <div class="stat-val" id="g-absent">—</div>
+        <div class="stat-label">Absent (30 days)</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon blue">📈</div>
+        <div class="stat-val" id="g-pct">—%</div>
+        <div class="stat-label">Attendance Rate</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon amber">🔥</div>
+        <div class="stat-val" id="g-streak">—</div>
+        <div class="stat-label">Current Streak</div>
+      </div>
+    </div>
+
+    <!-- Big bar chart -->
+    <div class="chart-card" style="margin-bottom:20px">
+      <div class="chart-title">Daily Attendance — Last 30 Days</div>
+      <div class="chart-sub">
+        <span style="display:inline-flex;align-items:center;gap:6px;margin-right:16px">
+          <span style="width:12px;height:12px;background:#3fb950;border-radius:2px;display:inline-block"></span> Present
+        </span>
+        <span style="display:inline-flex;align-items:center;gap:6px">
+          <span style="width:12px;height:12px;background:rgba(63,185,80,0.12);border:1px solid rgba(63,185,80,0.3);border-radius:2px;display:inline-block"></span> Absent
+        </span>
+      </div>
+      <canvas id="big-bar" height="200"></canvas>
+    </div>
+
+    <!-- Weekly + monthly side by side -->
+    <div class="charts-grid">
+      <div class="chart-card">
+        <div class="chart-title">Weekly Summary</div>
+        <div class="chart-sub">Present days each week</div>
+        <canvas id="big-weekly" height="200"></canvas>
+      </div>
+      <div class="chart-card">
+        <div class="chart-title">Attendance Rate Gauge</div>
+        <div class="chart-sub">Overall attendance percentage</div>
+        <canvas id="big-donut" height="200"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ HISTORY ═══ -->
+  <div id="tab-history" class="hidden">
+    <div class="sec-header">
+      <h2>📋 Attendance Records</h2>
+      <span class="badge badge-blue" id="hist-count">— records</span>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>#</th><th>Date</th><th>Day</th><th>Time</th><th>Status</th><th>Method</th></tr>
+        </thead>
+        <tbody id="hist-body">
+          <tr><td colspan="6" style="text-align:center;padding:48px;color:var(--fg-muted)">Loading…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+</div>
+
+<!-- ══ Camera Modal ══ -->
+<div class="modal-overlay" id="cam-modal">
+  <div class="modal" style="max-width:560px">
+    <div class="modal-header">
+      <h3>🔍 Face Recognition</h3>
+      <button class="btn btn-ghost btn-icon" onclick="closeCam()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="cam-wrap">
+        <video id="cam-video" autoplay muted playsinline></video>
+        <canvas id="cam-canvas"></canvas>
+        <div class="scan-line"></div>
+        <div class="cam-corner tl"></div><div class="cam-corner tr"></div>
+        <div class="cam-corner bl"></div><div class="cam-corner br"></div>
+        <div class="face-badge" id="face-badge">0 faces</div>
+        <div class="cam-status-bar">
+          <div class="cam-live-dot"></div>
+          <span id="cam-status">Starting camera…</span>
+        </div>
+      </div>
+
+      <div style="display:flex;gap:10px;margin-top:14px">
+        <button class="btn btn-action btn-lg w-full" id="detect-btn" onclick="detect()" disabled>
+          <span id="detect-txt">Initialising…</span>
+          <span id="detect-spin" class="spinner hidden"></span>
+        </button>
+      </div>
+
+      <!-- Go home button (shown after result) -->
+      <div id="go-home-wrap" style="display:none;margin-top:10px">
+        <button class="btn btn-outline w-full btn-lg" onclick="goHome()">
+          🏠 Back to Dashboard
+        </button>
+      </div>
+
+      <!-- Result card -->
+      <div id="result-card" class="result-card hidden">
+        <div class="result-top ok" id="result-top">
+          <div id="res-photo"></div>
+          <div>
+            <div class="result-name" id="res-name">—</div>
+            <div class="result-roll" id="res-roll">—</div>
+          </div>
+          <div style="margin-left:auto" id="res-badge"></div>
+        </div>
+        <div class="result-grid">
+          <div><div class="rg-label">Semester</div><div class="rg-val" id="res-sem">—</div></div>
+          <div><div class="rg-label">Branch</div><div class="rg-val" id="res-branch">—</div></div>
+          <div><div class="rg-label">Date</div><div class="rg-val" id="res-date">—</div></div>
+          <div><div class="rg-label">Time</div><div class="rg-val" id="res-time">—</div></div>
+          <div><div class="rg-label">Confidence</div><div class="rg-val" id="res-conf">—</div></div>
+          <div><div class="rg-label">Status</div><div class="rg-val text-success" id="res-status">—</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+import { Auth, Students, Attendance, getUser } from "../js/api.js";
+import { toast, hideLoader, setLoaderText, openModal, closeModal,
+         fmtDate, fmtTime, initials, emptyRow, avatarEl } from "../js/ui.js";
+import { loadModels, modelsReady, buildMatcher, detectAndRecognise,
+         startLive, stopLive } from "../js/face-engine.js";
+
+// ── Auth guard ────────────────────────
+const user = getUser();
+if (!user || !localStorage.getItem("fa_token")) { window.location.href = "login.html"; }
+if (user && user.role === "admin") window.location.href = "admin.html";
+
+const $ = id => document.getElementById(id);
+let camStream = null, graphData = null;
+let miniBarChart=null, miniLineChart=null, bigBarChart=null, bigWeeklyChart=null, bigDonutChart=null;
+
+// ── Init ──────────────────────────────
+document.addEventListener("DOMContentLoaded", async () => {
+  renderHeader();
+  await Promise.all([ initAI(), loadStats(), loadHistory(), loadGraph() ]);
+});
+
+function renderHeader() {
+  const days = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+  const now = new Date();
+  $("dash-name").textContent = user.name.split(" ")[0];
+  $("dash-date").textContent = days[now.getDay()] + ", " + now.toLocaleDateString("en-IN",{day:"2-digit",month:"long",year:"numeric"});
+  $("nav-name").textContent  = user.name;
+  if (user.photoBase64) $("nav-avatar").innerHTML = "<img src='"+user.photoBase64+"' alt=''/>";
+  else $("nav-avatar").textContent = initials(user.name);
+  $("profile-photo").innerHTML = avatarEl(user.photoBase64, user.name, "xl");
+  $("pf-name").textContent = user.name;
+  $("pf-sub").textContent  = user.branch;
+  $("pf-roll").textContent = user.rollNumber;
+  $("pf-sem").textContent  = user.semester;
+  $("pf-face-badge").innerHTML = user.isRegistered
+    ? "<span class='badge badge-green'>✅ Face registered</span>"
+    : "<span class='badge badge-amber'>⚠️ Not registered</span>";
+}
+
+// ── AI ────────────────────────────────
+async function initAI() {
+  try {
+    await loadModels(t => setLoaderText(t));
+    const res = await Students.getFaceDescriptors();
+    buildMatcher(res.descriptors);
+    const txt = "✅ AI ready · "+res.count+" faces";
+    $("ai-badge").textContent  = txt; $("ai-badge").className  = "badge badge-green";
+    $("ai-badge2").textContent = txt; $("ai-badge2").className = "badge badge-green";
+    $("launch-btn").disabled   = false;
+    $("launch-btn2").disabled  = false;
+    hideLoader();
+    toast("AI ready — "+res.count+" face(s) loaded.", "success");
+  } catch(e) {
+    hideLoader();
+    $("ai-badge").textContent = "❌ AI failed"; $("ai-badge").className = "badge badge-red";
+    toast("AI models failed. Check internet.", "error");
+  }
+}
+
+// ── Stats ─────────────────────────────
+async function loadStats() {
+  try {
+    const res   = await Attendance.getHistory(user.rollNumber);
+    const s     = res.stats;
+    const today = new Date().toISOString().split("T")[0];
+    const tr    = res.records.find(r => r.date===today);
+
+    $("t-present").textContent = s.present;
+    $("t-absent").textContent  = s.absent;
+    $("t-pct").textContent     = s.percentage + "%";
+    $("t-today").textContent   = tr ? "✅ Present" : "❌ Absent";
+    $("today-status-big").textContent = tr ? "✅" : "❌";
+    $("today-status-big").style.color = tr ? "var(--success)" : "var(--danger)";
+
+    const pill = tr
+      ? "<div class='status-pill present'><div class='sdot'></div>Marked at "+fmtTime(tr.time)+"</div>"
+      : "<div class='status-pill absent'><div class='sdot'></div>Not yet marked today</div>";
+    $("today-pill-wrap").innerHTML  = pill;
+    $("today-pill-wrap2").innerHTML = pill;
+  } catch {}
+}
+
+// ── History ───────────────────────────
+async function loadHistory() {
+  try {
+    const res  = await Attendance.getHistory(user.rollNumber);
+    $("hist-count").textContent = res.stats.total + " records";
+    const body = $("hist-body");
+    if (!res.records.length) { body.innerHTML = emptyRow(6,"No records yet."); return; }
+    const days = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+    body.innerHTML = res.records.map((r,i) => {
+      const d = new Date(r.date);
+      return "<tr><td class='text-subtle text-xs'>"+(i+1)+"</td>"
+        +"<td class='row-time'>"+fmtDate(r.date)+"</td>"
+        +"<td class='text-muted text-sm'>"+days[d.getDay()]+"</td>"
+        +"<td class='row-time'>"+fmtTime(r.time)+"</td>"
+        +"<td><span class='badge badge-green'>● Present</span></td>"
+        +"<td class='text-muted text-xs'>"+(r.markedVia||"").replace(/_/g," ")+"</td></tr>";
+    }).join("");
+  } catch { $("hist-body").innerHTML = emptyRow(6, "Failed to load."); }
+}
+
+// ── Graph ─────────────────────────────
+async function loadGraph() {
+  try {
+    const res = await Attendance.getGraph(user.rollNumber);
+    graphData  = res;
+    $("g-present").textContent = res.presentDays;
+    $("g-absent").textContent  = res.totalDays - res.presentDays;
+    $("g-pct").textContent     = ((res.presentDays/res.totalDays)*100).toFixed(1)+"%";
+
+    // Calculate streak
+    let streak=0;
+    const sorted = [...res.chartData].reverse();
+    for (const d of sorted) { if (d.present) streak++; else break; }
+    $("g-streak").textContent = streak + (streak===1?" day":" days");
+
+    drawAllCharts(res);
+  } catch {}
+}
+
+// ── Charts ────────────────────────────
+const GRID   = "rgba(48,54,61,0.6)";
+const TICK   = "#484f58";
+const GREEN  = "#3fb950";
+const GREEN2 = "rgba(63,185,80,0.12)";
+const BLUE   = "#58a6ff";
+const BLUE2  = "rgba(88,166,255,0.12)";
+
+function baseOpts(yMax=1.2) {
+  return {
+    responsive:true, maintainAspectRatio:true,
+    plugins:{ legend:{ display:false } },
+    scales:{
+      x:{ ticks:{color:TICK,font:{size:10,family:"'JetBrains Mono',monospace"}}, grid:{color:GRID}, border:{color:"transparent"} },
+      y:{ ticks:{color:TICK,font:{size:10},stepSize:1}, grid:{color:GRID}, border:{color:"transparent"}, max:yMax }
+    }
+  };
+}
+
+function drawAllCharts(data) {
+  const labels = data.chartData.map(d => d.date.slice(5));
+  const values = data.chartData.map(d => d.present);
+  const wkLbl  = data.weekly.map(w => w.week.slice(5));
+  const wkVal  = data.weekly.map(w => w.present);
+
+  // Destroy existing charts
+  [miniBarChart,miniLineChart,bigBarChart,bigWeeklyChart,bigDonutChart].forEach(c => c && c.destroy());
+
+  // Mini bar
+  miniBarChart = new Chart($("mini-bar"), {
+    type:"bar",
+    data:{ labels: labels.filter((_,i)=>i%3===0),
+           datasets:[{ data:values.filter((_,i)=>i%3===0),
+             backgroundColor: values.filter((_,i)=>i%3===0).map(v=>v?GREEN:GREEN2),
+             borderColor: values.filter((_,i)=>i%3===0).map(v=>v?"rgba(63,185,80,0.6)":"rgba(63,185,80,0.2)"),
+             borderWidth:1, borderRadius:3 }] },
+    options:{ ...baseOpts(1.3), scales:{ x:baseOpts().scales.x, y:{ display:false } } }
+  });
+
+  // Mini line
+  miniLineChart = new Chart($("mini-line"), {
+    type:"line",
+    data:{ labels:wkLbl, datasets:[{
+      data:wkVal, borderColor:BLUE, backgroundColor:BLUE2,
+      tension:0.4, fill:true, pointBackgroundColor:BLUE, pointRadius:4, pointHoverRadius:6
+    }]},
+    options:{ ...baseOpts(7), scales:{
+      x:{ ...baseOpts().scales.x },
+      y:{ ...baseOpts(7).scales.y, ticks:{color:TICK,font:{size:10},stepSize:1}, max:7 }
+    }}
+  });
+
+  // Big bar
+  bigBarChart = new Chart($("big-bar"), {
+    type:"bar",
+    data:{ labels,
+           datasets:[{ data:values,
+             backgroundColor: values.map(v=>v?GREEN:GREEN2),
+             borderColor: values.map(v=>v?"rgba(63,185,80,0.7)":"rgba(63,185,80,0.2)"),
+             borderWidth:1, borderRadius:3,
+             hoverBackgroundColor: values.map(v=>v?"#56d364":"rgba(63,185,80,0.2)")
+           }]},
+    options:{ ...baseOpts(1.2),
+      plugins:{ legend:{display:false},
+        tooltip:{ callbacks:{
+          label: ctx => ctx.parsed.y===1?"✅ Present":"❌ Absent",
+          title: ctx => "Date: "+ctx[0].label
+        }}
+      }
+    }
+  });
+
+  // Weekly bar
+  bigWeeklyChart = new Chart($("big-weekly"), {
+    type:"bar",
+    data:{ labels:wkLbl, datasets:[{
+      data:wkVal,
+      backgroundColor: wkVal.map(v => {
+        if (v>=5) return GREEN; if (v>=3) return BLUE; return "rgba(210,153,34,0.6)";
+      }),
+      borderRadius:4, borderWidth:0
+    }]},
+    options:{ ...baseOpts(7),
+      plugins:{ legend:{display:false},
+        tooltip:{ callbacks:{ label: ctx => ctx.parsed.y+" day(s) present" } }
+      },
+      scales:{
+        x:{ ...baseOpts().scales.x },
+        y:{ ticks:{color:TICK,font:{size:10},stepSize:1}, grid:{color:GRID}, border:{color:"transparent"}, max:7 }
+      }
+    }
+  });
+
+  // Donut gauge
+  const pct    = Math.round((data.presentDays/data.totalDays)*100);
+  const absent = 100-pct;
+  bigDonutChart = new Chart($("big-donut"), {
+    type:"doughnut",
+    data:{
+      labels:["Present","Absent"],
+      datasets:[{ data:[pct,absent],
+        backgroundColor:[GREEN,"rgba(63,185,80,0.08)"],
+        borderColor:["rgba(63,185,80,0.8)","rgba(63,185,80,0.1)"],
+        borderWidth:1
+      }]
+    },
+    options:{
+      responsive:true, maintainAspectRatio:true, cutout:"72%",
+      plugins:{
+        legend:{ display:true, position:"bottom",
+          labels:{ color:TICK, font:{size:11}, padding:16, boxWidth:12 }
+        },
+        tooltip:{ callbacks:{ label: ctx => ctx.label+": "+ctx.parsed+"%" } }
+      }
+    },
+    plugins:[{
+      id:"centerText",
+      beforeDraw(chart) {
+        const { ctx, width, height } = chart;
+        ctx.save();
+        ctx.font = "bold 28px Inter, sans-serif";
+        ctx.fillStyle = "#c9d1d9";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        const cx = width/2, cy = height/2 - 12;
+        ctx.fillText(pct+"%", cx, cy);
+        ctx.font = "12px Inter, sans-serif";
+        ctx.fillStyle = "#484f58";
+        ctx.fillText("attendance", cx, cy+22);
+        ctx.restore();
+      }
+    }]
+  });
+}
+
+// ── Tabs ──────────────────────────────
+window.showTab = (tab) => {
+  ["home","mark","graph","history"].forEach(t => $("tab-"+t).classList.toggle("hidden", t!==tab));
+  document.querySelectorAll(".sidebar-link").forEach(l => l.classList.remove("active"));
+  const idx = {home:0,mark:1,graph:2,history:3};
+  document.querySelectorAll(".sidebar-link")[idx[tab]]?.classList.add("active");
+};
+
+// ── Camera ────────────────────────────
+window.openCam = async () => {
+  if (!modelsReady()) { toast("AI still loading…", "warning"); return; }
+  $("result-card").classList.add("hidden");
+  $("go-home-wrap").style.display = "none";
+  $("detect-btn").disabled = true;
+  $("detect-txt").textContent = "Starting camera…";
+  openModal("cam-modal");
+  try {
+    camStream = await navigator.mediaDevices.getUserMedia({ video:{width:640,height:480,facingMode:"user"} });
+    const vid = $("cam-video");
+    vid.srcObject = camStream;
+    await new Promise(r => vid.onloadedmetadata=r);
+    $("cam-status").textContent = "Camera ready — look at the screen";
+    $("detect-btn").disabled = false;
+    $("detect-txt").textContent = "🔍 Detect & Mark Attendance";
+    startLive(vid, $("cam-canvas"), n => {
+      $("face-badge").textContent = n+" face"+(n!==1?"s":"");
+      $("cam-status").textContent = n>0 ? "✅ Face detected — click to mark attendance" : "No face — look at camera";
+    });
+  } catch {
+    $("cam-status").textContent = "Camera denied.";
+    toast("Camera access denied. Allow permission.", "error");
+  }
+};
+
+window.closeCam = () => {
+  closeModal("cam-modal");
+  stopLive();
+  if (camStream) { camStream.getTracks().forEach(t=>t.stop()); camStream=null; }
+};
+
+window.detect = async () => {
+  if (!modelsReady()) return;
+  $("detect-btn").disabled = true;
+  $("detect-txt").classList.add("hidden");
+  $("detect-spin").classList.remove("hidden");
+  $("cam-status").textContent = "Analysing face…";
+
+  try {
+    const result = await detectAndRecognise($("cam-video"));
+    if (!result.found) {
+      $("cam-status").textContent = "❌ No face detected. Try again.";
+      toast("No face detected. Look directly at the camera.", "error");
+      return;
+    }
+    if (!result.isRecognised) {
+      $("cam-status").textContent = "⚠️ Face not recognised.";
+      toast("Face not recognised. Register your face first.", "warning");
+      return;
+    }
+
+    let record, alreadyMarked=false;
+    try {
+      const r = await Attendance.mark(result.studentData.rollNumber, result.confidence);
+      record = r.record;
+    } catch(err) {
+      if (err.data?.alreadyMarked) { record=err.data.record; alreadyMarked=true; }
+      else throw err;
+    }
+
+    showResult(result.studentData, record, result.confidence, alreadyMarked);
+    $("cam-status").textContent = alreadyMarked ? "ℹ️ Already marked today." : "✅ Attendance marked!";
+    $("go-home-wrap").style.display = "block";
+
+    if (!alreadyMarked) {
+      toast("✅ "+result.studentData.name+" — Attendance marked!", "success");
+      await loadStats();
+      await loadGraph();
+    } else {
+      toast("Attendance already marked today.", "info");
+    }
+  } catch(err) {
+    toast(err.message||"Error.", "error");
+    $("cam-status").textContent = "Error — try again.";
+  } finally {
+    $("detect-btn").disabled = false;
+    $("detect-txt").classList.remove("hidden");
+    $("detect-spin").classList.add("hidden");
+    $("detect-txt").textContent = "🔍 Detect Again";
+  }
+};
+
+function showResult(student, record, confidence, alreadyMarked) {
+  const card = $("result-card");
+  card.classList.remove("hidden");
+  $("result-top").className = "result-top ok";
+  $("res-photo").innerHTML  = avatarEl(student.photo, student.name);
+  $("res-name").textContent   = student.name;
+  $("res-roll").textContent   = student.rollNumber;
+  $("res-badge").innerHTML    = "<span class='badge badge-green'>● Present</span>";
+  $("res-sem").textContent    = student.semester||"—";
+  $("res-branch").textContent = student.branch;
+  $("res-date").textContent   = fmtDate(record?.date);
+  $("res-time").textContent   = fmtTime(record?.time);
+  $("res-conf").textContent   = confidence ? (confidence*100).toFixed(1)+"%" : "—";
+  $("res-status").textContent = alreadyMarked ? "Already marked ✓" : "Marked now ✓";
+}
+
+window.goHome = async () => {
+  closeCam();
+  showTab("home");
+  await loadStats();
+  await loadGraph();
+};
+
+window.doLogout = () => { Auth.logout(); window.location.href="login.html"; };
+</script>
+</body>
+</html>

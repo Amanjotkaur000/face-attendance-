@@ -1,0 +1,904 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>Admin — FaceAttend</title>
+  <link rel="stylesheet" href="../css/globals.css"/>
+  <link rel="stylesheet" href="../css/admin.css"/>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.13/dist/face-api.js"></script>
+  <style>
+    h2,h3{color:#e6edf3}
+    .page-title h1{color:#e6edf3;margin-bottom:4px}
+    .page-title .sub{color:#8b949e;font-size:.875rem}
+    .sechd{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;gap:12px;flex-wrap:wrap}
+
+    /* ── camera ── */
+    .cambox{position:relative;width:100%;aspect-ratio:4/3;background:#000;border-radius:12px;overflow:hidden;border:2px solid #30363d;transition:border-color .3s;margin-bottom:12px}
+    .cambox video{width:100%;height:100%;object-fit:cover;display:block}
+    .cambox canvas{position:absolute;top:0;left:0;width:100%;height:100%}
+    .cambeam{position:absolute;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,#58a6ff,transparent);box-shadow:0 0 8px #58a6ff;animation:bm 2s ease-in-out infinite;z-index:4}
+    @keyframes bm{0%{top:0%}50%{top:91%}100%{top:0%}}
+    .camc{position:absolute;width:20px;height:20px;border-color:#58a6ff;border-style:solid;opacity:.85;z-index:5}
+    .camc.tl{top:10px;left:10px;border-width:2px 0 0 2px}
+    .camc.tr{top:10px;right:10px;border-width:2px 2px 0 0}
+    .camc.bl{bottom:10px;left:10px;border-width:0 0 2px 2px}
+    .camc.br{bottom:10px;right:10px;border-width:0 2px 2px 0}
+    .camfoot{position:absolute;bottom:0;left:0;right:0;z-index:6;background:rgba(13,17,23,.9);backdrop-filter:blur(8px);padding:9px 14px;display:flex;align-items:center;gap:8px;font-size:.79rem;font-weight:500;color:#58a6ff}
+    .camdot{width:7px;height:7px;border-radius:50%;flex-shrink:0;animation:pk 1s infinite}
+    @keyframes pk{0%,100%{opacity:1}50%{opacity:.2}}
+    .campill{position:absolute;top:10px;right:10px;z-index:7;background:rgba(13,17,23,.88);border:1px solid #58a6ff;border-radius:6px;padding:4px 10px;font-size:.72rem;font-weight:600;color:#58a6ff;font-family:'JetBrains Mono',monospace}
+
+    /* ── status pill ── */
+    .statpill{padding:10px 14px;border-radius:8px;border:1px solid #30363d;background:#161b22;font-size:.84rem;font-weight:500;margin-bottom:12px;display:flex;align-items:center;gap:8px;color:#8b949e}
+    .statpill.act{background:rgba(88,166,255,.08);border-color:rgba(88,166,255,.3);color:#79c0ff}
+    .statpill.ok {background:rgba(63,185,80,.08); border-color:rgba(63,185,80,.3); color:#56d364}
+    .statpill.warn{background:rgba(210,153,34,.08);border-color:rgba(210,153,34,.3);color:#e3b341}
+    .statpill.err{background:rgba(248,81,73,.08); border-color:rgba(248,81,73,.3); color:#ff7b72}
+    .sdot{width:8px;height:8px;border-radius:50%;background:currentColor;flex-shrink:0;animation:pk 1.3s infinite}
+
+    /* ── quality bar ── */
+    .qrow{background:#161b22;border:1px solid #30363d;border-radius:8px;padding:10px 14px;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between;font-size:.82rem}
+    .qtrack{width:120px;height:6px;background:#21262d;border-radius:99px;overflow:hidden}
+    .qfill{height:100%;border-radius:99px;transition:width .2s,background .2s}
+
+    /* ── sample dots ── */
+    .sdots{display:flex;gap:6px;margin-bottom:8px}
+    .sdot2{width:40px;height:8px;border-radius:4px;background:#21262d;transition:background .2s}
+    .sdot2.y{background:#e3b341}.sdot2.g{background:#3fb950}.sdot2.r{background:#f85149}
+
+    /* ── buttons ── */
+    .capbtn{width:100%;background:#238636;border:1px solid rgba(63,185,80,.4);color:#fff;font-weight:700;font-size:.92rem;padding:13px;border-radius:8px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;font-family:'Inter',sans-serif;margin-bottom:8px;transition:background .2s}
+    .capbtn:hover{background:#2ea043}.capbtn:disabled{opacity:.4;cursor:not-allowed}
+    .stopbtn{width:100%;background:transparent;border:1px solid #30363d;color:#8b949e;padding:10px;border-radius:8px;cursor:pointer;font-family:'Inter',sans-serif;transition:all .2s}
+    .stopbtn:hover{background:#21262d;color:#e6edf3}
+
+    /* ── permission error ── */
+    .permbox{background:rgba(248,81,73,.07);border:1px solid rgba(248,81,73,.3);border-radius:10px;padding:16px;margin-top:10px}
+    .permbox h4{color:#ff7b72;margin-bottom:8px;font-size:.9rem}
+    .permbox p{color:#8b949e;font-size:.82rem;line-height:1.9;margin:0}
+    .permbox button{margin-top:10px;width:100%;background:#238636;border:none;color:#fff;padding:10px;border-radius:8px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif}
+
+    /* ── misc ── */
+    .card2{background:#161b22;border:1px solid #30363d;border-radius:12px;padding:20px;margin-bottom:16px}
+    .chip{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:99px;font-size:.7rem;font-weight:600}
+    .chip.g{background:rgba(63,185,80,.1);color:#56d364;border:1px solid rgba(63,185,80,.25)}
+    .chip.a{background:rgba(210,153,34,.1);color:#e3b341;border:1px solid rgba(210,153,34,.25)}
+    .filter-bar{display:flex;align-items:flex-end;gap:14px;flex-wrap:wrap;background:#161b22;border:1px solid #30363d;border-radius:16px;padding:20px;margin-bottom:20px}
+    .filter-bar .form-group{margin-bottom:0}
+    .live-badge{display:inline-flex;align-items:center;gap:6px;padding:4px 12px;background:rgba(248,81,73,.1);border:1px solid rgba(248,81,73,.3);border-radius:99px;font-size:.72rem;font-weight:700;color:#ff7b72;text-transform:uppercase}
+    .live-dot{width:6px;height:6px;border-radius:50%;background:#f85149;animation:pk 1s infinite}
+    .branch-row{display:flex;align-items:center;gap:12px;margin-bottom:10px}
+    .branch-name{font-size:.8rem;color:#8b949e;width:200px;flex-shrink:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .branch-bar{flex:1}.branch-count{font-size:.82rem;font-weight:600;color:#e6edf3;width:28px;text-align:right}
+    .rn{font-weight:600;color:#e6edf3}.rr{font-family:'JetBrains Mono',monospace;font-size:.82rem;color:#58a6ff}
+    .rb{font-size:.8rem;color:#8b949e}.rt{font-family:'JetBrains Mono',monospace;font-size:.82rem;color:#8b949e}
+    .td-nw{display:flex;align-items:center;gap:10px}
+  </style>
+</head>
+<body>
+<div id="toast-container"></div>
+<div id="page-loader"><div class="ld-ring"></div><div class="ld-text" id="ld-text">Loading…</div></div>
+
+<nav class="navbar">
+  <div class="nav-logo"><div class="nav-logo-mark">🎓</div>Face<span>Attend</span>
+    <span style="font-size:.65rem;color:#484f58;font-weight:700;margin-left:8px;letter-spacing:1px">ADMIN</span>
+  </div>
+  <div class="nav-right">
+    <div class="nav-user">
+      <div class="nav-avatar" style="background:linear-gradient(135deg,#d29922,#f85149)" id="nav-av">A</div>
+      <span id="nav-nm">Admin</span>
+    </div>
+    <button class="btn btn-outline btn-sm" onclick="doLogout()">Sign out</button>
+  </div>
+</nav>
+
+<aside class="sidebar">
+  <div class="sidebar-group">
+    <div class="sidebar-label">Overview</div>
+    <a class="sidebar-link active" id="nav-overview" href="#" onclick="go('overview')"><span class="si">📊</span>Dashboard</a>
+  </div>
+  <div class="sidebar-group">
+    <div class="sidebar-label">Management</div>
+    <a class="sidebar-link" id="nav-students" href="#" onclick="go('students')"><span class="si">🎓</span>Students</a>
+    <a class="sidebar-link" id="nav-register" href="#" onclick="go('register')"><span class="si">📷</span>Register Faces</a>
+    <a class="sidebar-link" id="nav-today"    href="#" onclick="go('today')"><span class="si">📋</span>Today's Attendance</a>
+    <a class="sidebar-link" id="nav-report"   href="#" onclick="go('report')"><span class="si">📁</span>Reports</a>
+  </div>
+</aside>
+
+<div class="main-wrap"><div class="page-body">
+
+<!-- OVERVIEW -->
+<div id="page-overview">
+  <div class="page-title"><h1>Admin Dashboard</h1><p class="sub">Overview and today's attendance stats</p></div>
+  <div class="stats-grid">
+    <div class="stat-card"><div class="stat-icon blue">🎓</div><div class="stat-val" id="ov-total">—</div><div class="stat-label">Total Students</div></div>
+    <div class="stat-card"><div class="stat-icon green">✅</div><div class="stat-val" id="ov-present">—</div><div class="stat-label">Present Today</div></div>
+    <div class="stat-card"><div class="stat-icon red">❌</div><div class="stat-val" id="ov-absent">—</div><div class="stat-label">Absent Today</div></div>
+    <div class="stat-card"><div class="stat-icon amber">📷</div><div class="stat-val" id="ov-reg">—</div><div class="stat-label">Faces Registered</div></div>
+  </div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:20px">
+    <div class="card">
+      <div class="sechd"><h3>Attendance Rate</h3><span id="ov-rate" style="color:#58a6ff;font-weight:700">0%</span></div>
+      <div class="progress-wrap"><div class="progress-fill green" id="ov-rbar" style="width:0%"></div></div>
+      <p style="font-size:.8rem;margin-top:10px" id="ov-rdesc">—</p>
+    </div>
+    <div class="card"><div class="sechd"><h3>Registration Status</h3></div><canvas id="donut" height="140"></canvas></div>
+  </div>
+  <div class="card"><div class="sechd"><h3>Students per Branch</h3></div><div id="branches"></div></div>
+</div>
+
+<!-- STUDENTS -->
+<div id="page-students" class="hidden">
+  <div class="sechd"><h2>🎓 All Students</h2><button class="btn btn-green" onclick="openAdd()">+ Add Student</button></div>
+  <div class="card" style="margin-bottom:16px">
+    <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center">
+      <div class="search-box"><span>🔍</span><input id="s-q" placeholder="Search name or roll…" oninput="filterS()"/></div>
+      <select class="form-control" id="s-br" style="width:200px" onchange="filterS()">
+        <option value="">All Branches</option>
+        <option>Computer Science Engineering</option><option>Information Technology</option>
+        <option>Electronics &amp; Communication</option><option>Mechanical Engineering</option>
+        <option>Civil Engineering</option><option>Electrical Engineering</option>
+      </select>
+    </div>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>#</th><th>Photo</th><th>Name</th><th>Roll</th><th>Semester</th><th>Branch</th><th>Face</th><th>Actions</th></tr></thead>
+      <tbody id="stbody"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- REGISTER FACES -->
+<div id="page-register" class="hidden">
+  <div class="sechd">
+    <div>
+      <h2>📷 Register Student Faces</h2>
+      <p style="color:#8b949e;font-size:.86rem;margin-top:4px">Camera detects your face and saves it automatically when quality is good.</p>
+    </div>
+  </div>
+
+  <div style="display:grid;grid-template-columns:1fr 1.1fr;gap:20px;align-items:start">
+
+    <!-- Left: student picker -->
+    <div class="card2">
+      <h3 style="margin-bottom:14px">① Pick Student</h3>
+      <div class="form-group">
+        <label class="form-label">Select student to register</label>
+        <select class="form-control" id="rsel" onchange="pickStudent()"><option value="">— choose —</option></select>
+      </div>
+
+      <div id="rinfo" style="display:none;background:#0d1117;border:1px solid #21262d;border-radius:10px;padding:14px;margin-bottom:12px">
+        <div style="display:flex;align-items:center;gap:12px">
+          <div id="rphoto"></div>
+          <div>
+            <div style="font-weight:700;color:#e6edf3" id="rnm">—</div>
+            <div style="font-size:.8rem;color:#8b949e;font-family:'JetBrains Mono',monospace;margin-top:2px" id="rrl">—</div>
+            <div id="rbadge" style="margin-top:6px"></div>
+          </div>
+        </div>
+      </div>
+
+      <button class="btn btn-blue w-full" id="ropenBtn" onclick="startReg()" style="display:none">
+        📷 Open Camera &amp; Register Face
+      </button>
+
+      <!-- camera denied error -->
+      <div class="permbox" id="permbox" style="display:none">
+        <h4>🔧 Camera blocked — fix it:</h4>
+        <p>
+          <b style="color:#e6edf3">1.</b> Click the 🔒 icon in your browser address bar<br/>
+          <b style="color:#e6edf3">2.</b> Set <b>Camera → Allow</b><br/>
+          <b style="color:#e6edf3">3.</b> Click Reload below<br/><br/>
+          Also try: close Zoom / Teams / Skype<br/>
+          Use Chrome or Edge browser (not Firefox)
+        </p>
+        <button onclick="location.reload()">🔄 Reload &amp; Try Again</button>
+      </div>
+
+      <div id="rtips" style="display:none;margin-top:12px;padding:12px;background:#0d1117;border:1px solid #21262d;border-radius:8px;font-size:.8rem;color:#8b949e;line-height:2">
+        <b style="color:#e6edf3">📌 Tips for best results:</b><br/>
+        • Face camera directly — no tilting<br/>
+        • Good lighting — face a window or lamp<br/>
+        • Stay ~50cm from screen<br/>
+        • Keep glasses on if you wear them during scanning
+      </div>
+    </div>
+
+    <!-- Right: camera -->
+    <div class="card2" id="rcamcard" style="display:none">
+      <h3 style="margin-bottom:14px">② Auto Face Capture</h3>
+
+      <!-- AI loading -->
+      <div id="raibar" style="display:none;background:rgba(88,166,255,.08);border:1px solid rgba(88,166,255,.3);border-radius:8px;padding:10px 14px;margin-bottom:10px;font-size:.84rem;color:#79c0ff;display:flex;align-items:center;gap:8px">
+        <span class="spinner" style="width:14px;height:14px;flex-shrink:0"></span>
+        <span id="raitxt">Loading AI models…</span>
+      </div>
+
+      <!-- Status -->
+      <div class="statpill act" id="rpill"><div class="sdot"></div><span id="rpilltxt">Starting camera…</span></div>
+
+      <!-- Sample progress -->
+      <div id="rdotswrap" style="display:none;margin-bottom:10px">
+        <div style="font-size:.75rem;color:#8b949e;margin-bottom:6px">Capturing: <span id="rdotslbl">0 / 5</span></div>
+        <div class="sdots" id="rdots"></div>
+      </div>
+
+      <!-- Camera feed -->
+      <div class="cambox" id="rcambox">
+        <video id="rvid" autoplay muted playsinline></video>
+        <canvas id="rcvs"></canvas>
+        <div class="cambeam"></div>
+        <div class="camc tl"></div><div class="camc tr"></div>
+        <div class="camc bl"></div><div class="camc br"></div>
+        <div class="campill" id="rcampill">—</div>
+        <div class="camfoot">
+          <div class="camdot" id="rcamdot" style="background:#f85149;box-shadow:0 0 5px #f85149"></div>
+          <span id="rcamtxt">Starting…</span>
+        </div>
+      </div>
+
+      <!-- Quality -->
+      <div class="qrow">
+        <span style="color:#8b949e">Face quality</span>
+        <div style="display:flex;align-items:center;gap:8px">
+          <div class="qtrack"><div class="qfill" id="rqfill" style="width:0%;background:#3fb950"></div></div>
+          <span id="rqtxt" style="font-size:.78rem;font-weight:600;color:#8b949e;min-width:80px">—</span>
+        </div>
+      </div>
+
+      <!-- Manual button (fallback) -->
+      <button class="capbtn" id="rcapbtn" onclick="saveNow()" style="display:none">
+        <span id="rcaptxt">📸 Save Face Now</span>
+        <span id="rcapspin" class="spinner hidden"></span>
+      </button>
+      <button class="stopbtn" onclick="stopReg()">■ Stop Camera</button>
+    </div>
+
+  </div>
+</div>
+
+<!-- TODAY -->
+<div id="page-today" class="hidden">
+  <div class="sechd">
+    <h2>📋 Today's Attendance</h2>
+    <div style="display:flex;gap:10px;align-items:center">
+      <span class="live-badge"><span class="live-dot"></span>LIVE</span>
+      <button class="btn btn-outline btn-sm" onclick="loadToday()">🔄 Refresh</button>
+    </div>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>#</th><th>Photo</th><th>Name</th><th>Roll</th><th>Branch</th><th>Semester</th><th>Time</th><th>Status</th></tr></thead>
+      <tbody id="tobody"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- REPORTS -->
+<div id="page-report" class="hidden">
+  <div class="sechd"><h2>📁 Attendance Reports</h2></div>
+  <div class="filter-bar">
+    <div class="form-group"><label class="form-label">From</label><input class="form-control" type="date" id="r-from"/></div>
+    <div class="form-group"><label class="form-label">To</label><input class="form-control" type="date" id="r-to"/></div>
+    <div class="form-group">
+      <label class="form-label">Branch</label>
+      <select class="form-control" id="r-branch" style="width:200px">
+        <option value="">All Branches</option>
+        <option>Computer Science Engineering</option><option>Information Technology</option>
+        <option>Electronics &amp; Communication</option><option>Mechanical Engineering</option>
+        <option>Civil Engineering</option><option>Electrical Engineering</option>
+      </select>
+    </div>
+    <button class="btn btn-blue" onclick="loadReport()">Generate Report</button>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>#</th><th>Photo</th><th>Date</th><th>Time</th><th>Name</th><th>Roll</th><th>Branch</th><th>Status</th></tr></thead>
+      <tbody id="rpbody"><tr><td colspan="8" style="text-align:center;padding:48px;color:#484f58">Select filters and click Generate.</td></tr></tbody>
+    </table>
+  </div>
+</div>
+
+</div></div>
+
+<!-- Student Modal -->
+<div class="modal-overlay" id="stmodal">
+  <div class="modal" style="max-width:520px">
+    <div class="modal-header"><h3 id="stmodal-title">Add Student</h3><button class="btn btn-ghost btn-icon" onclick="closeStModal()">✕</button></div>
+    <div class="modal-body">
+      <input type="hidden" id="f-id"/>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Full Name *</label><input class="form-control" id="f-name" placeholder="Full name"/></div>
+        <div class="form-group"><label class="form-label">Roll Number *</label><input class="form-control" id="f-roll" placeholder="CS2024001" style="text-transform:uppercase"/></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Email *</label><input class="form-control" id="f-email" type="email" placeholder="student@college.edu"/></div>
+        <div class="form-group"><label class="form-label">Phone</label><input class="form-control" id="f-phone" placeholder="9876543210"/></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Semester *</label>
+          <select class="form-control" id="f-sem">
+            <option value="">—</option>
+            <option>Semester 1</option><option>Semester 2</option><option>Semester 3</option><option>Semester 4</option>
+            <option>Semester 5</option><option>Semester 6</option><option>Semester 7</option><option>Semester 8</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Branch *</label>
+          <select class="form-control" id="f-branch">
+            <option value="">—</option>
+            <option>Computer Science Engineering</option><option>Information Technology</option>
+            <option>Electronics &amp; Communication</option><option>Mechanical Engineering</option>
+            <option>Civil Engineering</option><option>Electrical Engineering</option>
+          </select>
+        </div>
+      </div>
+      <div id="sterr" class="alert alert-error hidden"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeStModal()">Cancel</button>
+      <button class="btn btn-green" id="stbtn" onclick="saveStudent()">
+        <span id="sttxt">Save</span><span id="stspin" class="spinner hidden"></span>
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Confirm Modal -->
+<div class="modal-overlay" id="cfmmodal">
+  <div class="modal" style="max-width:380px">
+    <div class="modal-header"><h3 id="cfmtitle">Confirm</h3></div>
+    <div class="modal-body"><p id="cfmmsg" style="color:#8b949e"></p></div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="cfmAns(false)">Cancel</button>
+      <button class="btn btn-red" onclick="cfmAns(true)">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+import { Auth, Students, Attendance, Admin, getUser } from "../js/api.js";
+import { toast, hideLoader, fmtDate, fmtTime, avatarEl } from "../js/ui.js";
+import { loadModels, modelsReady, snapshot } from "../js/face-engine.js";
+
+// ── Auth guard ──────────────────────────────────────────────
+const me = getUser();
+if (!me || !localStorage.getItem("fa_token")) { window.location.href = "index.html"; }
+if (me && me.role !== "admin" && me.role !== "superadmin") { window.location.href = "index.html"; }
+
+const E  = id => document.getElementById(id);
+const NR = (n, m) => `<tr><td colspan="${n}" style="text-align:center;padding:48px;color:#484f58">${m}</td></tr>`;
+
+let allStudents = [];
+let donutChart  = null;
+
+// Registration state
+let regStream   = null;
+let regTimer    = null;
+let saving      = false;
+let goodCount   = 0;
+const THRESHOLD = 50;   // minimum quality % to trigger auto-save
+
+window.doLogout = () => { Auth.logout(); window.location.href = "index.html"; };
+
+// ── Boot ──────────────────────────────────────────────────
+document.addEventListener("DOMContentLoaded", async () => {
+  E("nav-nm").textContent = me.name || "Admin";
+  E("r-to").value   = new Date().toISOString().split("T")[0];
+  E("r-from").value = new Date(Date.now() - 30 * 86400000).toISOString().split("T")[0];
+  await loadOverview();
+  hideLoader();
+  // Pre-load AI models in background
+  loadModels().catch(e => console.warn("Background model load:", e.message));
+});
+
+// ── Navigation ────────────────────────────────────────────
+window.go = async p => {
+  ["overview","students","register","today","report"].forEach(x => {
+    E("page-"+x).classList.toggle("hidden", x !== p);
+    const n = E("nav-"+x); if (n) n.classList.toggle("active", x === p);
+  });
+  if (p === "overview")  loadOverview();
+  if (p === "students")  loadStudents();
+  if (p === "register")  loadRegPage();
+  if (p === "today")     loadToday();
+  if (p !== "register")  stopReg();
+};
+
+// ════════════════════════════════════════════════════════
+// OVERVIEW
+// ════════════════════════════════════════════════════════
+async function loadOverview() {
+  try {
+    const { stats: s } = await Admin.getDashboard();
+    E("ov-total").textContent   = s.total;
+    E("ov-present").textContent = s.presentToday;
+    E("ov-absent").textContent  = s.absentToday;
+    E("ov-reg").textContent     = s.registered;
+    E("ov-rate").textContent    = s.attendanceRate + "%";
+    E("ov-rbar").style.width    = s.attendanceRate + "%";
+    E("ov-rdesc").textContent   = s.presentToday + " present out of " + s.total + " students";
+
+    if (donutChart) donutChart.destroy();
+    donutChart = new Chart(E("donut"), {
+      type: "doughnut",
+      data: { labels: ["Registered","Not Registered"],
+              datasets: [{ data:[s.registered,s.unregistered], backgroundColor:["#3fb950","#21262d"], borderColor:"transparent", borderWidth:0 }] },
+      options: { responsive:true, maintainAspectRatio:true, cutout:"68%", plugins:{ legend:{ labels:{ color:"#8b949e", font:{size:11} } } } }
+    });
+
+    const mx = Math.max(...s.branchData.map(b => b.count), 1);
+    E("branches").innerHTML = s.branchData.map(b =>
+      `<div class="branch-row">
+        <div class="branch-name" title="${b.branch}">${b.branch}</div>
+        <div class="branch-bar"><div class="progress-wrap"><div class="progress-fill green" style="width:${(b.count/mx*100).toFixed(0)}%"></div></div></div>
+        <div class="branch-count">${b.count}</div>
+      </div>`
+    ).join("");
+  } catch(e) { toast("Dashboard error: " + e.message, "error"); }
+}
+
+// ════════════════════════════════════════════════════════
+// STUDENTS
+// ════════════════════════════════════════════════════════
+async function loadStudents() {
+  E("stbody").innerHTML = NR(8, "Loading…");
+  try {
+    const r = await Students.getAll();
+    allStudents = r.students;
+    renderStudents(allStudents);
+  } catch(e) { toast("Failed: " + e.message, "error"); }
+}
+
+function renderStudents(list) {
+  if (!list.length) { E("stbody").innerHTML = NR(8, "No students found."); return; }
+  E("stbody").innerHTML = list.map((s, i) => `
+    <tr>
+      <td style="color:#484f58;font-size:.75rem">${i+1}</td>
+      <td>${avatarEl(s.photoBase64, s.name)}</td>
+      <td><div class="td-nw"><div><div class="rn">${s.name}</div><div style="font-size:.75rem;color:#8b949e">${s.email}</div></div></div></td>
+      <td class="rr">${s.rollNumber}</td>
+      <td style="font-size:.85rem">${s.semester}</td>
+      <td class="rb">${s.branch}</td>
+      <td>${s.isRegistered ? `<span class="chip g">✅ Yes</span>` : `<span class="chip a">⏳ No</span>`}</td>
+      <td><div style="display:flex;gap:6px">
+        <button class="btn btn-outline btn-sm" onclick="openEdit('${s._id}')">✏️</button>
+        <button class="btn btn-red btn-sm" onclick="delStudent('${s._id}','${s.name.replace(/'/g,"")}')">🗑️</button>
+      </div></td>
+    </tr>`
+  ).join("");
+}
+
+window.filterS = () => {
+  const q = E("s-q").value.toLowerCase(), b = E("s-br").value;
+  renderStudents(allStudents.filter(s =>
+    (!q || s.name.toLowerCase().includes(q) || s.rollNumber.toLowerCase().includes(q)) && (!b || s.branch === b)
+  ));
+};
+
+window.openAdd = () => {
+  E("stmodal-title").textContent = "Add Student"; E("f-id").value = "";
+  ["f-name","f-email","f-phone"].forEach(id => { E(id).value = ""; E(id).disabled = false; });
+  E("f-roll").value = ""; E("f-roll").disabled = false;
+  E("f-sem").value = ""; E("f-branch").value = "";
+  E("sterr").classList.add("hidden");
+  E("stmodal").classList.add("open");
+};
+window.openEdit = id => {
+  const s = allStudents.find(x => x._id === id); if (!s) return;
+  E("stmodal-title").textContent = "Edit Student"; E("f-id").value = id;
+  E("f-name").value = s.name; E("f-roll").value = s.rollNumber; E("f-roll").disabled = true;
+  E("f-email").value = s.email; E("f-phone").value = s.phone || "";
+  E("f-sem").value = s.semester; E("f-branch").value = s.branch;
+  E("sterr").classList.add("hidden");
+  E("stmodal").classList.add("open");
+};
+window.closeStModal = () => E("stmodal").classList.remove("open");
+window.saveStudent = async () => {
+  const id = E("f-id").value;
+  const d = { name:E("f-name").value.trim(), rollNumber:E("f-roll").value.trim().toUpperCase(), email:E("f-email").value.trim(), phone:E("f-phone").value.trim(), semester:E("f-sem").value, branch:E("f-branch").value };
+  const err = E("sterr"); err.classList.add("hidden");
+  if (!d.name||!d.rollNumber||!d.email||!d.semester||!d.branch) { err.textContent="Fill all required fields."; err.classList.remove("hidden"); return; }
+  E("stbtn").disabled=true; E("sttxt").classList.add("hidden"); E("stspin").classList.remove("hidden");
+  try { if(id) await Students.update(id,d); else await Students.create(d); toast(id?"Updated.":"Added.","success"); E("stmodal").classList.remove("open"); await loadStudents(); }
+  catch(e) { err.textContent=e.message; err.classList.remove("hidden"); }
+  finally { E("stbtn").disabled=false; E("sttxt").classList.remove("hidden"); E("stspin").classList.add("hidden"); }
+};
+let _cfmRes = null;
+window.cfmAns = v => { E("cfmmodal").classList.remove("open"); if(_cfmRes){_cfmRes(v);_cfmRes=null;} };
+const confirm2 = (msg,title) => { E("cfmtitle").textContent=title||"Confirm"; E("cfmmsg").textContent=msg; E("cfmmodal").classList.add("open"); return new Promise(r=>{_cfmRes=r;}); };
+window.delStudent = async (id,name) => {
+  if (!await confirm2(`Deactivate "${name}"?`,"Deactivate")) return;
+  try { await Students.remove(id); toast(name+" deactivated.","success"); await loadStudents(); }
+  catch(e) { toast(e.message,"error"); }
+};
+
+// ════════════════════════════════════════════════════════
+// REGISTER FACES
+// ════════════════════════════════════════════════════════
+async function loadRegPage() {
+  if (!allStudents.length) { try { const r=await Students.getAll(); allStudents=r.students; } catch {} }
+  E("rsel").innerHTML = `<option value="">— Select a student —</option>` +
+    allStudents.map(s =>
+      `<option value="${s._id}" data-roll="${s.rollNumber}" data-name="${s.name.replace(/"/g,"")}"`+
+      ` data-reg="${s.isRegistered}">${s.name} (${s.rollNumber})${s.isRegistered ? " ✅" : ""}</option>`
+    ).join("");
+  E("rinfo").style.display    = "none";
+  E("ropenBtn").style.display = "none";
+  E("rcamcard").style.display = "none";
+  E("permbox").style.display  = "none";
+  E("rtips").style.display    = "none";
+  stopReg();
+}
+
+window.pickStudent = () => {
+  const sel = E("rsel"), opt = sel.options[sel.selectedIndex];
+  if (!opt || !opt.value) {
+    E("rinfo").style.display="none"; E("ropenBtn").style.display="none";
+    E("rcamcard").style.display="none"; stopReg(); return;
+  }
+  const s = allStudents.find(x => x._id === opt.value);
+  E("rnm").textContent  = opt.dataset.name;
+  E("rrl").textContent  = opt.dataset.roll;
+  E("rbadge").innerHTML = opt.dataset.reg === "true"
+    ? `<span class="chip g">✅ Face registered (will update)</span>`
+    : `<span class="chip a">⏳ Face not yet registered</span>`;
+  E("rphoto").innerHTML = avatarEl(s && s.photoBase64 ? s.photoBase64 : null, opt.dataset.name, "lg");
+  E("rinfo").style.display    = "block";
+  E("ropenBtn").style.display = "block";
+  E("rtips").style.display    = "block";
+  E("permbox").style.display  = "none";
+  E("rcamcard").style.display = "none";
+  stopReg();
+};
+
+window.startReg = async () => {
+  E("ropenBtn").disabled = true;
+  E("permbox").style.display = "none";
+
+  // Load AI models
+  if (!modelsReady()) {
+    E("raibar").style.display = "flex";
+    try { await loadModels(t => { E("raitxt").textContent = t; }); }
+    catch(e) {
+      E("raibar").style.display = "none"; E("ropenBtn").disabled = false;
+      toast("AI failed to load. Check internet connection.", "error"); return;
+    }
+    E("raibar").style.display = "none";
+  }
+  E("ropenBtn").disabled = false;
+
+  // Show camera panel
+  E("rcamcard").style.display = "block";
+  setTimeout(() => E("rcamcard").scrollIntoView({ behavior:"smooth", block:"nearest" }), 100);
+  setPill("Starting camera…", "act");
+  stopReg(); // clean any old stream
+
+  // ── Start camera ──────────────────────────────────────
+  try {
+    let stream = null;
+    // Try multiple constraint sets so it works on all devices
+    for (const c of [
+      { video:{ width:{ideal:640}, height:{ideal:480}, facingMode:"user" } },
+      { video:{ facingMode:"user" } },
+      { video:true }
+    ]) {
+      try { stream = await navigator.mediaDevices.getUserMedia(c); break; }
+      catch(e) { console.warn("Camera try failed:", e.name, c); }
+    }
+    if (!stream) throw Object.assign(new Error("Camera permission denied"), { name:"NotAllowedError" });
+
+    regStream = stream;
+    const vid = E("rvid");
+    vid.srcObject = regStream;
+
+    // Wait for video frames to actually be ready
+    await new Promise((ok, fail) => {
+      const t = setTimeout(() => fail(new Error("Camera timeout")), 10000);
+      vid.onloadedmetadata = () => {
+        vid.play()
+          .then(() => { clearTimeout(t); setTimeout(ok, 500); })
+          .catch(fail);
+      };
+    });
+
+    // Camera is ready
+    E("rcamdot").style.background = "#3fb950";
+    E("rcamdot").style.boxShadow  = "0 0 5px #3fb950";
+    E("rcamtxt").textContent = "Camera live — look at screen";
+    goodCount = 0;
+    setPill("👀 Look directly at the camera…", "act");
+
+    // ── LIVE DETECTION LOOP ────────────────────────────
+    // Runs every 350ms
+    // When quality >= THRESHOLD for 3 consecutive frames → auto-save
+    if (regTimer) clearInterval(regTimer);
+    regTimer = setInterval(async () => {
+      if (saving || !regStream) return;
+      const v = E("rvid");
+      if (!v || v.readyState < 2 || v.videoWidth === 0) return;
+
+      try {
+        // Detect faces (fast preview mode)
+        const dets = await faceapi.detectAllFaces(
+          v, new faceapi.TinyFaceDetectorOptions({ inputSize:320, scoreThreshold:0.4 })
+        );
+
+        // Draw bounding boxes on canvas
+        const cv   = E("rcvs");
+        const dims = { width: v.videoWidth, height: v.videoHeight };
+        faceapi.matchDimensions(cv, dims);
+        const ctx = cv.getContext("2d");
+        ctx.clearRect(0, 0, cv.width, cv.height);
+        faceapi.resizeResults(dets, dims).forEach(d => {
+          const { x, y, width, height } = d.box, s = d.score;
+          const col = s > 0.75 ? "#3fb950" : s > 0.5 ? "#58a6ff" : "#e3b341";
+          ctx.strokeStyle = col; ctx.lineWidth = 2.5;
+          ctx.shadowColor = col; ctx.shadowBlur = 8;
+          ctx.strokeRect(x, y, width, height); ctx.shadowBlur = 0;
+          const lbl = (s*100).toFixed(0)+"%", lw = ctx.measureText(lbl).width+12;
+          ctx.fillStyle = col; ctx.fillRect(x-1, y-22, lw, 20);
+          ctx.fillStyle = "#000"; ctx.font = "bold 11px monospace"; ctx.fillText(lbl, x+5, y-7);
+        });
+
+        const n  = dets.length;
+        const sc = n > 0 ? Math.round(dets[0].score * 100) : 0;
+
+        // Update UI indicators
+        E("rcampill").textContent = n > 0 ? n + " face" + (n!==1?"s":"") + " detected" : "No face";
+        E("rcampill").style.color = n > 0 ? "#56d364" : "#58a6ff";
+        E("rqfill").style.width      = sc + "%";
+        E("rqfill").style.background = sc >= THRESHOLD ? "#3fb950" : sc >= 35 ? "#e3b341" : "#f85149";
+        E("rqtxt").textContent = sc > 0 ? sc + "% quality" : "—";
+        E("rqtxt").style.color = sc >= THRESHOLD ? "#56d364" : sc >= 35 ? "#e3b341" : "#ff7b72";
+        E("rcambox").style.borderColor = n>0 && sc>=THRESHOLD ? "rgba(63,185,80,.8)" : "#30363d";
+
+        if (n > 0 && sc >= THRESHOLD) {
+          // Good face detected
+          goodCount++;
+          const remaining = 3 - goodCount;
+          E("rcamtxt").textContent = remaining > 0
+            ? `✅ Quality ${sc}% — saving in ${remaining}…`
+            : `✅ Quality ${sc}% — saving now!`;
+          setPill(`✅ Great quality (${sc}%) — auto-saving face!`, "ok");
+
+          if (goodCount >= 3) {
+            // TRIGGER AUTO SAVE
+            clearInterval(regTimer); regTimer = null;
+            doSave();
+          }
+        } else {
+          goodCount = 0;
+          if (n > 0) {
+            E("rcamtxt").textContent = `⚠️ Quality ${sc}% — need ${THRESHOLD}%+ (move closer / better light)`;
+            setPill(`⚠️ Quality ${sc}% — move closer or improve lighting`, "warn");
+          } else {
+            E("rcamtxt").textContent = "No face detected — look directly at camera";
+            setPill("👀 Look directly at the camera…", "act");
+          }
+        }
+      } catch(e) { /* silent */ }
+    }, 350);
+
+    // Show manual button after 20 seconds as fallback
+    setTimeout(() => {
+      if (!saving && regStream) {
+        E("rcapbtn").style.display = "block";
+        setPill("⏰ Auto-scan timed out — click Save Face Now", "warn");
+      }
+    }, 20000);
+
+  } catch(e) {
+    console.error("Camera error:", e.name, e.message);
+    E("rcamdot").style.background = "#f85149";
+    E("rcamdot").style.boxShadow  = "0 0 5px #f85149";
+    E("ropenBtn").disabled = false;
+
+    if (e.name === "NotAllowedError" || e.name === "PermissionDeniedError") {
+      E("permbox").style.display = "block";
+      setPill("❌ Camera permission denied — see fix on the left", "err");
+    } else if (e.name === "NotFoundError") {
+      toast("No camera found. Connect a webcam.", "error");
+      setPill("❌ No camera found. Please connect a webcam.", "err");
+    } else if (e.name === "NotReadableError") {
+      toast("Camera in use by another app. Close Zoom/Teams/Skype.", "error");
+      setPill("❌ Camera busy — close Zoom, Teams, or Skype first", "err");
+    } else {
+      toast("Camera error: " + e.message, "error");
+      setPill("❌ Camera error: " + e.message, "err");
+    }
+  }
+};
+
+window.stopReg = () => {
+  if (regTimer) { clearInterval(regTimer); regTimer = null; }
+  if (regStream) { regStream.getTracks().forEach(t => t.stop()); regStream = null; }
+  saving = false; goodCount = 0;
+  const cv = E("rcvs");
+  if (cv) cv.getContext("2d").clearRect(0, 0, cv.width, cv.height);
+  E("rcambox").style.borderColor = "#30363d";
+  E("rcapbtn").style.display = "none";
+};
+
+window.saveNow = () => doSave();
+
+async function doSave() {
+  if (saving) return;
+
+  const sel  = E("rsel");
+  const opt  = sel && sel.options[sel.selectedIndex];
+  const roll = opt && opt.dataset && opt.dataset.roll;
+  const name = opt && opt.dataset && opt.dataset.name;
+  if (!roll) { toast("Select a student first.", "warning"); return; }
+
+  saving = true;
+  E("rcapbtn").disabled = true;
+  E("rcaptxt").classList.add("hidden");
+  E("rcapspin").classList.remove("hidden");
+  setPill("📸 Capturing face — stay still…", "act");
+
+  // Show sample dots
+  E("rdotswrap").style.display = "block";
+  E("rdots").innerHTML = Array.from({length:5}, (_,i) =>
+    `<div class="sdot2" id="sd${i}"></div>`
+  ).join("");
+  E("rdotslbl").textContent = "0 / 5";
+
+  try {
+    const vid = E("rvid");
+    if (!vid || !vid.srcObject || vid.readyState < 2) {
+      toast("Camera not ready.", "warning"); saving = false; return;
+    }
+
+    // Capture 5 samples at quality inputSize 416
+    const descriptors = [];
+    let bestPhoto = null, bestScore = 0;
+
+    for (let i = 0; i < 5; i++) {
+      const dot = document.getElementById("sd" + i);
+      if (dot) dot.className = "sdot2 y";
+      E("rdotslbl").textContent = (i+1) + " / 5";
+
+      try {
+        // withFaceLandmarks(true) = tiny model — THIS IS THE KEY
+        const det = await faceapi
+          .detectSingleFace(vid, new faceapi.TinyFaceDetectorOptions({ inputSize:416, scoreThreshold:0.4 }))
+          .withFaceLandmarks(true)
+          .withFaceDescriptor();
+
+        if (det && det.detection.score > 0.4) {
+          descriptors.push(det.descriptor);
+          if (dot) dot.className = "sdot2 g";
+          if (det.detection.score > bestScore) {
+            bestScore   = det.detection.score;
+            bestPhoto   = snapshot(vid);
+          }
+          console.log(`Sample ${i+1}: ✅ score=${det.detection.score.toFixed(3)}`);
+        } else {
+          if (dot) dot.className = "sdot2 r";
+          console.log(`Sample ${i+1}: ❌ no face or low quality`);
+        }
+      } catch(e) {
+        if (dot) dot.className = "sdot2 r";
+        console.warn(`Sample ${i+1} error:`, e.message);
+      }
+
+      // Small gap between samples
+      await new Promise(r => setTimeout(r, 150));
+    }
+
+    if (!descriptors.length) {
+      setPill("❌ No face captured. Try again with better lighting.", "err");
+      toast("No face detected. Check lighting and face the camera.", "error");
+      saving = false;
+      // Restart auto-scan
+      goodCount = 0;
+      startReg();
+      return;
+    }
+
+    // Average all descriptors → one stable 128-D vector
+    const avg = new Float32Array(128);
+    for (let i = 0; i < 128; i++) {
+      avg[i] = descriptors.reduce((s, d) => s + d[i], 0) / descriptors.length;
+    }
+
+    const quality = Math.round(bestScore * 100);
+    setPill(`💾 Saving ${descriptors.length}/5 samples (${quality}% quality)…`, "ok");
+
+    // Save to database
+    await Students.registerFace(roll, avg, bestPhoto);
+
+    // ✅ SUCCESS
+    toast(`✅ Face saved for ${name}! ${descriptors.length}/5 samples, ${quality}% quality`, "success");
+    stopReg();
+
+    // Update left panel
+    E("rphoto").innerHTML  = avatarEl(bestPhoto, name, "lg");
+    E("rbadge").innerHTML  = `<span class="chip g">✅ Face registered successfully ✓</span>`;
+    setPill(`✅ Registered ${name}! Select another student to continue.`, "ok");
+    E("rcamcard").style.display = "none";
+    E("ropenBtn").style.display = "block";
+    E("ropenBtn").textContent = "📷 Register Another";
+
+    await loadStudents(); // refresh table
+
+  } catch(e) {
+    console.error("doSave error:", e);
+    setPill("❌ Failed: " + (e.message || "Unknown error"), "err");
+    toast(e.message || "Registration failed.", "error");
+    saving = false;
+    goodCount = 0;
+  } finally {
+    saving = false;
+    E("rcapbtn").disabled = false;
+    E("rcaptxt").classList.remove("hidden");
+    E("rcapspin").classList.add("hidden");
+    E("rdotswrap").style.display = "none";
+  }
+}
+
+function setPill(msg, cls) {
+  const p = E("rpill"); if (!p) return;
+  p.className = "statpill " + (cls || "");
+  E("rpilltxt").textContent = msg;
+}
+
+// ════════════════════════════════════════════════════════
+// TODAY'S ATTENDANCE
+// ════════════════════════════════════════════════════════
+window.loadToday = async () => {
+  E("tobody").innerHTML = NR(8, "Loading…");
+  try {
+    const r = await Attendance.getToday();
+    if (!r.records.length) { E("tobody").innerHTML = NR(8, "No attendance marked today yet."); return; }
+    E("tobody").innerHTML = r.records.map((x, i) => `
+      <tr>
+        <td style="color:#484f58;font-size:.75rem">${i+1}</td>
+        <td>${avatarEl(x.student&&x.student.photoBase64, x.studentName)}</td>
+        <td class="rn">${x.studentName}</td>
+        <td class="rr">${x.rollNumber}</td>
+        <td class="rb">${x.branch}</td>
+        <td style="font-size:.85rem">${x.semester}</td>
+        <td class="rt">${fmtTime(x.time)}</td>
+        <td><span class="badge badge-green">● Present</span></td>
+      </tr>`
+    ).join("");
+  } catch(e) { toast("Error: " + e.message, "error"); }
+};
+
+// ════════════════════════════════════════════════════════
+// REPORTS
+// ════════════════════════════════════════════════════════
+window.loadReport = async () => {
+  E("rpbody").innerHTML = NR(8, "Loading…");
+  try {
+    const p = {};
+    if (E("r-from").value)   p.from   = E("r-from").value;
+    if (E("r-to").value)     p.to     = E("r-to").value;
+    if (E("r-branch").value) p.branch = E("r-branch").value;
+    const r = await Attendance.getReport(p);
+    if (!r.records.length) { E("rpbody").innerHTML = NR(8, "No records found."); return; }
+    E("rpbody").innerHTML = r.records.map((x, i) => `
+      <tr>
+        <td style="color:#484f58;font-size:.75rem">${i+1}</td>
+        <td>${avatarEl(x.student&&x.student.photoBase64, x.studentName)}</td>
+        <td class="rt">${fmtDate(x.date)}</td>
+        <td class="rt">${fmtTime(x.time)}</td>
+        <td class="rn">${x.studentName}</td>
+        <td class="rr">${x.rollNumber}</td>
+        <td class="rb">${x.branch}</td>
+        <td><span class="badge badge-green">● Present</span></td>
+      </tr>`
+    ).join("");
+    toast(r.count + " records loaded.", "success");
+  } catch(e) { toast("Report error: " + e.message, "error"); }
+};
+</script>
+</body>
+</html>

@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>Scan Attendance — FaceAttend</title>
+  <link rel="stylesheet" href="../css/globals.css"/>
+  <link rel="stylesheet" href="../css/home.css"/>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.13/dist/face-api.js"></script>
+  <style>
+/* ── Scan page specific ── */
+.scan-outer{min-height:100vh;padding:80px 16px 40px;display:flex;align-items:flex-start;justify-content:center;position:relative;z-index:1}
+.scan-inner{width:100%;max-width:620px}
+.scan-title{text-align:center;margin-bottom:28px}
+.scan-title h2{color:#fff;font-size:1.7rem;font-weight:700;margin-bottom:6px}
+.scan-title p {color:var(--fg2);font-size:0.9rem}
+
+/* Scanner box */
+.scanner-box{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-xl);overflow:hidden;margin-bottom:16px}
+.scanner-head{padding:18px 22px;border-bottom:1px solid var(--border);background:var(--bg3);display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.scanner-head-left h3{color:#fff;font-size:1rem;margin-bottom:3px}
+.scanner-head-left p {color:var(--fg2);font-size:0.82rem}
+.scanner-body{padding:22px}
+
+/* Status pill */
+.s-pill{display:inline-flex;align-items:center;gap:8px;padding:9px 15px;border-radius:var(--r-pill);font-size:0.84rem;font-weight:500;width:100%;margin-bottom:14px;border:1px solid}
+.s-pill.idle   {background:var(--bg3);color:var(--fg2);border-color:var(--border)}
+.s-pill.active {background:rgba(88,166,255,0.08);color:#79c0ff;border-color:rgba(88,166,255,0.3)}
+.s-pill.ok     {background:rgba(63,185,80,0.08);color:#56d364;border-color:rgba(63,185,80,0.3)}
+.s-pill.warn   {background:rgba(210,153,34,0.08);color:#e3b341;border-color:rgba(210,153,34,0.3)}
+.s-pill.fail   {background:rgba(248,81,73,0.08);color:#ff7b72;border-color:rgba(248,81,73,0.3)}
+.s-pill-dot{width:8px;height:8px;border-radius:50%;background:currentColor;flex-shrink:0;animation:pdot 1.3s infinite}
+@keyframes pdot{0%,100%{opacity:1}50%{opacity:0.2}}
+
+/* Camera */
+.cam-box{position:relative;width:100%;aspect-ratio:4/3;background:#000;border-radius:var(--r-lg);overflow:hidden;border:1px solid var(--border);margin-bottom:14px}
+.cam-box video {width:100%;height:100%;object-fit:cover;display:block}
+.cam-box canvas{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none}
+.scan-beam{position:absolute;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,var(--accent),transparent);animation:beam 2.4s ease-in-out infinite;box-shadow:0 0 10px var(--accent);z-index:4}
+@keyframes beam{0%{top:0%}50%{top:92%}100%{top:0%}}
+.cam-corner{position:absolute;width:22px;height:22px;border-color:var(--accent);border-style:solid;opacity:.85;z-index:5}
+.cam-corner.tl{top:10px;left:10px;border-width:2px 0 0 2px}
+.cam-corner.tr{top:10px;right:10px;border-width:2px 2px 0 0}
+.cam-corner.bl{bottom:10px;left:10px;border-width:0 0 2px 2px}
+.cam-corner.br{bottom:10px;right:10px;border-width:0 2px 2px 0}
+.cam-footer{position:absolute;bottom:0;left:0;right:0;z-index:6;background:rgba(13,17,23,0.88);backdrop-filter:blur(8px);padding:9px 14px;display:flex;align-items:center;gap:8px;font-size:0.79rem;font-weight:500;color:var(--accent)}
+.cam-ldot{width:7px;height:7px;border-radius:50%;background:var(--green);animation:pdot 1.1s infinite;box-shadow:0 0 5px var(--green)}
+.cam-faces{position:absolute;top:10px;right:10px;z-index:7;background:rgba(13,17,23,0.88);border:1px solid var(--accent);border-radius:6px;padding:4px 10px;font-size:0.72rem;font-weight:600;color:var(--accent);font-family:'JetBrains Mono',monospace}
+
+/* Countdown ring */
+.cdown{display:flex;flex-direction:column;align-items:center;gap:8px;margin-bottom:14px}
+.cdown-ring{position:relative;width:80px;height:80px;display:flex;align-items:center;justify-content:center}
+.cdown-ring svg{position:absolute;top:0;left:0;transform:rotate(-90deg)}
+.cdown-num{font-size:1.4rem;font-weight:800;color:#fff;z-index:1}
+.cdown-lbl{font-size:0.78rem;color:var(--fg2);text-align:center}
+
+/* Manual button */
+.detect-btn{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;background:linear-gradient(135deg,#1a7adb,#58a6ff);border:1px solid rgba(88,166,255,0.4);color:#fff;font-weight:700;font-size:1rem;padding:15px 24px;border-radius:var(--r-pill);cursor:pointer;transition:all 0.25s ease;font-family:'Inter',sans-serif;box-shadow:0 4px 20px rgba(88,166,255,0.3)}
+.detect-btn:hover{transform:translateY(-2px);box-shadow:0 8px 32px rgba(88,166,255,0.45)}
+.detect-btn:disabled{opacity:0.4;cursor:not-allowed;transform:none}
+.detect-btn .icon{font-size:1.2rem;animation:iconbeat 2s infinite}
+@keyframes iconbeat{0%,100%{transform:scale(1)}50%{transform:scale(1.2)}}
+
+/* ── Result card ── */
+.result-wrap{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-xl);overflow:hidden;animation:rIn 0.5s cubic-bezier(0.34,1.56,0.64,1)}
+@keyframes rIn{from{opacity:0;transform:translateY(24px) scale(0.96)}to{opacity:1;transform:none}}
+
+.r-banner{padding:22px;display:flex;align-items:center;gap:18px;border-bottom:1px solid var(--border);position:relative;overflow:hidden}
+.r-banner::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,#238636,#3fb950,#56d364)}
+.r-banner.old::before{background:linear-gradient(90deg,#1a7adb,#58a6ff)}
+.r-info{flex:1}
+.r-info h2{font-size:1.3rem;color:#fff;margin-bottom:4px}
+.r-info .r-sub{font-size:0.83rem;color:var(--fg2);font-family:'JetBrains Mono',monospace;margin-bottom:10px}
+.r-info .r-chips{display:flex;gap:7px;flex-wrap:wrap}
+.r-icon{font-size:2.6rem;flex-shrink:0;animation:rpop 0.4s var(--ts)}
+@keyframes rpop{from{transform:scale(0) rotate(-15deg)}to{transform:scale(1) rotate(0)}}
+
+/* Bio table */
+.bio-table{display:grid;grid-template-columns:repeat(3,1fr)}
+.bio-cell{padding:13px 18px;border-right:1px solid var(--border);border-bottom:1px solid var(--border)}
+.bio-cell:nth-child(3n){border-right:none}
+.bio-cell:nth-last-child(-n+3){border-bottom:none}
+.bio-label{font-size:0.67rem;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--fg3);margin-bottom:4px}
+.bio-value{font-size:0.88rem;font-weight:600;color:var(--fg);word-break:break-word}
+.bio-value.g{color:#56d364}
+.bio-value.b{color:#79c0ff}
+
+/* Stats section */
+.r-stats{padding:20px 22px;background:var(--bg3);border-top:1px solid var(--border);display:flex;gap:22px;align-items:flex-start}
+.r-pct-block{text-align:center;flex-shrink:0;width:88px}
+.r-pct-num{font-size:2rem;font-weight:800;color:#fff;line-height:1}
+.r-pct-lbl{font-size:0.7rem;color:var(--fg2);margin-top:3px}
+.r-pct-sub{font-size:0.72rem;color:var(--fg3);margin-top:6px;line-height:1.4}
+.r-chart-block{flex:1;min-width:0}
+.r-chart-lbl{font-size:0.77rem;color:var(--fg2);font-weight:500;margin-bottom:8px}
+
+/* Action buttons */
+.r-actions{display:flex;flex-direction:column;gap:8px;padding:16px 20px;border-top:1px solid var(--border)}
+.r-btn{display:flex;align-items:center;justify-content:center;gap:9px;padding:12px 18px;border-radius:var(--r-md);border:1px solid;font-family:'Inter',sans-serif;font-size:0.88rem;font-weight:600;cursor:pointer;transition:all .18s ease;text-decoration:none}
+.r-btn.green{background:var(--green2);border-color:rgba(63,185,80,.4);color:#fff}
+.r-btn.green:hover{background:#2ea043;transform:translateY(-1px)}
+.r-btn.grey {background:transparent;border-color:var(--border2);color:var(--fg)}
+.r-btn.grey:hover{background:var(--surface);transform:translateY(-1px)}
+  </style>
+</head>
+<body>
+<div id="toast-container"></div>
+<div id="page-loader">
+  <div class="ld-ring"></div>
+  <div class="ld-text" id="ld-text">Loading AI…</div>
+</div>
+
+<nav class="navbar">
+  <div class="nav-logo"><div class="nav-logo-mark">🎓</div>Face<span>Attend</span></div>
+  <div class="nav-right">
+    <span class="badge badge-amber" id="ai-badge">⏳ Loading AI…</span>
+    <a href="index.html" class="btn btn-outline btn-sm">← Home</a>
+  </div>
+</nav>
+
+<div class="scan-outer">
+<div class="scan-inner">
+
+  <div class="scan-title">
+    <h2>📷 Mark Attendance</h2>
+    <p>Auto face recognition — no login required</p>
+  </div>
+
+  <!-- Scanner section -->
+  <div id="scanner-section">
+    <div class="scanner-box">
+      <div class="scanner-head">
+        <div class="scanner-head-left">
+          <h3>Auto Face Scanner</h3>
+          <p>Good lighting · Face the camera · Stay still</p>
+        </div>
+      </div>
+      <div class="scanner-body">
+
+        <div class="s-pill idle" id="s-pill">
+          <div class="s-pill-dot"></div>
+          <span id="s-txt">Starting up…</span>
+        </div>
+
+        <div class="cam-box">
+          <video id="v" autoplay muted playsinline></video>
+          <canvas id="c"></canvas>
+          <div class="scan-beam"></div>
+          <div class="cam-corner tl"></div><div class="cam-corner tr"></div>
+          <div class="cam-corner bl"></div><div class="cam-corner br"></div>
+          <div class="cam-faces" id="cam-faces">—</div>
+          <div class="cam-footer">
+            <div class="cam-ldot" id="cam-ldot"></div>
+            <span id="cam-msg">Initialising…</span>
+          </div>
+        </div>
+
+        <!-- Countdown ring -->
+        <div class="cdown" id="cdown" style="display:none">
+          <div class="cdown-ring">
+            <svg width="80" height="80" viewBox="0 0 80 80">
+              <circle cx="40" cy="40" r="34" fill="none" stroke="var(--surface2)" stroke-width="5"/>
+              <circle id="cring" cx="40" cy="40" r="34" fill="none"
+                stroke="#3fb950" stroke-width="5"
+                stroke-dasharray="214" stroke-dashoffset="214"
+                stroke-linecap="round"
+                style="transition:stroke-dashoffset 0.95s linear,stroke 0.3s ease"/>
+            </svg>
+            <div class="cdown-num" id="cnum">—</div>
+          </div>
+          <div class="cdown-lbl">Auto-scanning · Look at the camera</div>
+        </div>
+
+        <!-- Manual button (shown as fallback) -->
+        <button class="detect-btn" id="dbtn" onclick="manualDetect()" style="display:none">
+          <span class="icon">🔍</span>
+          <span id="dbtn-txt">Detect My Face</span>
+          <span id="dbtn-spin" class="spinner hidden"></span>
+        </button>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- Result section -->
+  <div id="result-section" style="display:none">
+    <div class="result-wrap">
+
+      <div class="r-banner" id="r-banner">
+        <div id="r-photo"></div>
+        <div class="r-info">
+          <h2 id="r-name">—</h2>
+          <div class="r-sub" id="r-roll">—</div>
+          <div class="r-chips" id="r-chips"></div>
+        </div>
+        <div class="r-icon" id="r-icon">✅</div>
+      </div>
+
+      <div class="bio-table">
+        <div class="bio-cell"><div class="bio-label">Full Name</div><div class="bio-value" id="d-name">—</div></div>
+        <div class="bio-cell"><div class="bio-label">Roll Number</div><div class="bio-value b" style="font-family:'JetBrains Mono',monospace" id="d-roll">—</div></div>
+        <div class="bio-cell"><div class="bio-label">Branch</div><div class="bio-value" id="d-branch">—</div></div>
+        <div class="bio-cell"><div class="bio-label">Semester</div><div class="bio-value" id="d-sem">—</div></div>
+        <div class="bio-cell"><div class="bio-label">Email</div><div class="bio-value" style="font-size:0.8rem" id="d-email">—</div></div>
+        <div class="bio-cell"><div class="bio-label">Phone</div><div class="bio-value" id="d-phone">—</div></div>
+        <div class="bio-cell"><div class="bio-label">Date</div><div class="bio-value" id="d-date">—</div></div>
+        <div class="bio-cell"><div class="bio-label">Time Marked</div><div class="bio-value" id="d-time">—</div></div>
+        <div class="bio-cell"><div class="bio-label">Attendance</div><div class="bio-value g" id="d-status">—</div></div>
+      </div>
+
+      <div class="r-stats">
+        <div class="r-pct-block">
+          <div class="r-pct-num" id="d-pct">—%</div>
+          <div class="r-pct-lbl">Rate</div>
+          <div class="r-pct-sub" id="d-counts">— present<br/>— absent</div>
+        </div>
+        <div class="r-chart-block">
+          <div class="r-chart-lbl">Last 30 days attendance</div>
+          <div class="progress-wrap" style="margin-bottom:10px">
+            <div class="progress-fill green" id="d-bar" style="width:0%;transition:width 1.2s ease"></div>
+          </div>
+          <canvas id="chart" height="78"></canvas>
+        </div>
+      </div>
+
+      <div class="r-actions">
+        <button class="r-btn green" onclick="scanAgain()">🔄 Scan Another Student</button>
+        <a class="r-btn grey" href="index.html">🏠 Back to Home</a>
+      </div>
+
+    </div>
+  </div>
+
+</div>
+</div>
+
+<script type="module">
+import { ScanAPI, Students } from "../js/api.js";
+import { toast, hideLoader, setLoaderText, fmtDate, fmtTime } from "../js/ui.js";
+import { loadModels, modelsReady, buildMatcher, hasMatcher, detectAndRecognise, startLive, stopLive } from "../js/face-engine.js";
+
+const el = id => document.getElementById(id);
+let cam=null, chart=null, timer=null, tries=0, busy=false, done=false;
+const MAX=16;
+
+/* ── helpers ── */
+function pill(msg, type){ el("s-pill").className="s-pill "+type; el("s-txt").textContent=msg; }
+function ring(n,max){ const c=214,off=c-(n/max)*c; el("cring").style.strokeDashoffset=off; el("cring").style.stroke=n/max>.6?"#3fb950":n/max>.3?"#e3b341":"#f85149"; el("cnum").textContent=n; }
+function avatarHTML(photo, name, cls){
+  cls=cls||"";
+  if(photo) return "<div class='s-avatar "+cls+"'><img src='"+photo+"' alt='"+name+"'/></div>";
+  const ini=(name||"?").split(" ").map(n=>n[0]).join("").toUpperCase().slice(0,2);
+  return "<div class='s-avatar "+cls+"'>"+ini+"</div>";
+}
+
+/* ── boot ── */
+document.addEventListener("DOMContentLoaded", async()=>{
+  await startCam();
+  await loadAI();
+});
+
+async function startCam(){
+  pill("Starting camera…","idle");
+  try{
+    cam=await navigator.mediaDevices.getUserMedia({video:{width:{ideal:640},height:{ideal:480},facingMode:"user"}});
+    const v=el("v"); v.srcObject=cam;
+    await new Promise((ok,fail)=>{
+      const t=setTimeout(()=>fail(new Error("timeout")),12000);
+      v.onloadedmetadata=()=>v.play().then(()=>{clearTimeout(t);setTimeout(ok,600);}).catch(fail);
+    });
+    el("cam-ldot").style.background="#3fb950";
+    el("cam-msg").textContent="Camera live";
+    pill("Camera ready — loading AI models…","idle");
+  }catch(e){
+    el("cam-ldot").style.background="#f85149";
+    el("cam-msg").textContent="Camera denied";
+    pill("❌ Camera access denied. Allow camera and refresh.","fail");
+    toast("Camera denied. Allow permission and refresh.","error");
+  }
+}
+
+async function loadAI(){
+  try{
+    pill("⏳ Loading AI models…","active");
+    await loadModels(t=>{ setLoaderText(t); el("cam-msg").textContent=t; });
+    pill("📡 Loading registered faces…","active");
+    const res=await Students.getFaceDescriptors();
+    hideLoader();
+    if(!res.descriptors||res.descriptors.length===0){
+      pill("⚠️ No registered faces. Admin must register student faces first.","warn");
+      el("ai-badge").textContent="⚠️ No faces"; el("ai-badge").className="badge badge-amber";
+      el("dbtn").style.display="block";
+      toast("No registered faces in database.","warning",8000);
+      return;
+    }
+    buildMatcher(res.descriptors);
+    el("ai-badge").textContent="✅ AI Ready · "+res.count+" face(s)";
+    el("ai-badge").className="badge badge-green";
+    startLive(el("v"),el("c"),n=>{
+      if(done||busy)return;
+      el("cam-faces").textContent=n>0?n+" face"+(n!==1?"s":"")+" detected":"No face";
+      el("cam-faces").style.color=n>0?"#56d364":"#58a6ff";
+      el("cam-msg").textContent=n>0?"Face detected — scanning…":"Look at the camera";
+    });
+    startAuto();
+  }catch(e){
+    hideLoader();
+    pill("❌ AI failed: "+e.message,"fail");
+    el("ai-badge").textContent="❌ Error"; el("ai-badge").className="badge badge-red";
+    el("dbtn").style.display="block";
+    toast("AI load failed: "+e.message,"error");
+    console.error(e);
+  }
+}
+
+function startAuto(){
+  tries=MAX; el("cdown").style.display="flex"; ring(tries,MAX);
+  pill("👀 Auto-scanning… Look at camera and stay still","active");
+  timer=setInterval(async()=>{
+    if(busy||done)return;
+    tries--; ring(tries,MAX);
+    await attempt(true);
+    if(tries<=0&&!done){
+      clearInterval(timer);
+      el("cdown").style.display="none";
+      el("dbtn").style.display="block";
+      pill("⚠️ Auto-scan ended. Click button to try again.","warn");
+    }
+  },1000);
+}
+
+window.manualDetect=()=>attempt(false);
+
+async function attempt(silent){
+  if(busy||done)return;
+  if(!modelsReady()||!hasMatcher()){if(!silent)toast("AI not ready yet.","warning");return;}
+  busy=true;
+  if(!silent){
+    el("dbtn").disabled=true;
+    el("dbtn-txt").classList.add("hidden");
+    el("dbtn-spin").classList.remove("hidden");
+    pill("🔍 Analysing your face…","active");
+  }
+  try{
+    const result=await detectAndRecognise(el("v"));
+    if(!result.found){if(!silent)pill("❌ No face detected. Move closer and face the camera.","fail");return;}
+    if(!result.isRecognised){if(!silent){pill("⚠️ Face not recognised. Contact admin to register.","warn");toast("Face not recognised.","warning",5000);}return;}
+
+    // ✅ Recognised!
+    clearInterval(timer); done=true;
+    pill("✅ Recognised "+result.studentData.name+" — marking attendance…","ok");
+
+    // Mark attendance
+    let record=null, already=false;
+    try{
+      const r=await ScanAPI.mark(result.studentData.rollNumber, result.confidence);
+      record=r.record;
+    }catch(err){
+      if(err.data&&err.data.alreadyMarked){record=err.data.record;already=true;}
+      else throw err;
+    }
+
+    // Get full student data
+    let hist={student:{},stats:{present:0,absent:0,percentage:0,total:0},records:[]};
+    let graph={chartData:[],totalDays:30,presentDays:0};
+    try{ hist=await ScanAPI.getStudent(result.studentData.rollNumber); }catch(e){console.warn("hist fail",e);}
+    try{ graph=await ScanAPI.getGraph(result.studentData.rollNumber); }catch(e){console.warn("graph fail",e);}
+
+    // Stop camera
+    stopLive();
+    if(cam){cam.getTracks().forEach(t=>t.stop());cam=null;}
+
+    // Show result
+    el("scanner-section").style.display="none";
+    showResult(result.studentData, hist.student||{}, record, result.confidence, already, hist.stats||{}, graph);
+
+    if(!already) toast("✅ Attendance marked for "+result.studentData.name+"!","success");
+    else toast("ℹ️ Already marked today at "+fmtTime(record&&record.time),"info");
+
+  }catch(err){
+    if(!silent){pill("❌ Error: "+(err.message||"Try again"),"fail");toast("Error: "+err.message,"error");}
+    console.error("attempt error:",err);
+  }finally{
+    busy=false;
+    if(!silent){
+      el("dbtn").disabled=false;
+      el("dbtn-txt").classList.remove("hidden");
+      el("dbtn-spin").classList.add("hidden");
+    }
+  }
+}
+
+function showResult(face, student, record, conf, already, stats, graph){
+  el("result-section").style.display="block";
+
+  // Use student from DB if available, fallback to face data
+  const name   = student.name       || face.name       || "—";
+  const roll   = student.rollNumber  || face.rollNumber || "—";
+  const branch = student.branch      || face.branch     || "—";
+  const sem    = student.semester    || face.semester    || face.class || "—";
+  const email  = student.email       || "—";
+  const phone  = student.phone       || "—";
+  const photo  = student.photoBase64 || face.photo      || null;
+
+  // Banner
+  el("r-banner").className="r-banner"+(already?" old":"");
+  el("r-photo").innerHTML=avatarHTML(photo,name,"xl");
+  el("r-name").textContent=name;
+  el("r-roll").textContent=roll;
+  el("r-icon").textContent=already?"ℹ️":"✅";
+  el("r-chips").innerHTML=
+    "<span class='badge badge-blue'>"+sem+"</span>"+
+    "<span class='badge badge-purple'>"+(branch.split(" ")[0]||"—")+"</span>"+
+    (already?"<span class='badge badge-blue'>Already marked</span>":"<span class='badge badge-green'>✅ Marked now</span>");
+
+  // Bio table
+  el("d-name").textContent  =name;
+  el("d-roll").textContent  =roll;
+  el("d-branch").textContent=branch;
+  el("d-sem").textContent   =sem;
+  el("d-email").textContent =email;
+  el("d-phone").textContent =phone;
+  el("d-date").textContent  =fmtDate(record&&record.date);
+  el("d-time").textContent  =fmtTime(record&&record.time);
+  el("d-status").textContent=already?"Already Present ✓":"Present ✓";
+
+  // Stats
+  const pct=stats.percentage||0, pre=stats.present||0, abs=stats.absent||0;
+  el("d-pct").textContent   =pct+"%";
+  el("d-counts").textContent=pre+" present\n"+abs+" absent";
+  setTimeout(()=>{ el("d-bar").style.width=pct+"%"; },300);
+
+  // Chart
+  if(chart)chart.destroy();
+  const cd=graph.chartData||[];
+  chart=new Chart(el("chart"),{
+    type:"bar",
+    data:{
+      labels:cd.map(d=>d.date.slice(5)),
+      datasets:[{
+        data:cd.map(d=>d.present),
+        backgroundColor:cd.map(d=>d.present?"#3fb950":"rgba(63,185,80,0.1)"),
+        borderColor:    cd.map(d=>d.present?"rgba(63,185,80,0.6)":"rgba(63,185,80,0.1)"),
+        borderWidth:1,borderRadius:2
+      }]
+    },
+    options:{
+      responsive:true,maintainAspectRatio:true,animation:{duration:1000},
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>ctx.parsed.y===1?"✅ Present":"❌ Absent"}}},
+      scales:{
+        x:{ticks:{color:"#484f58",font:{size:9}},grid:{color:"rgba(48,54,61,0.5)"},border:{color:"transparent"}},
+        y:{display:false,max:1.3}
+      }
+    }
+  });
+
+  setTimeout(()=>el("result-section").scrollIntoView({behavior:"smooth",block:"start"}),200);
+}
+
+window.scanAgain=async()=>{
+  done=false;busy=false;tries=0;
+  clearInterval(timer);
+  if(chart){chart.destroy();chart=null;}
+  el("result-section").style.display="none";
+  el("scanner-section").style.display="block";
+  el("cdown").style.display="none";
+  el("dbtn").style.display="none";
+  stopLive();
+  if(cam){cam.getTracks().forEach(t=>t.stop());cam=null;}
+  await startCam();
+  if(modelsReady()&&hasMatcher()){
+    startLive(el("v"),el("c"),n=>{
+      if(done||busy)return;
+      el("cam-faces").textContent=n>0?n+" face(s)":"No face";
+      el("cam-faces").style.color=n>0?"#56d364":"#58a6ff";
+    });
+    startAuto();
+  }
+};
+</script>
+</body>
+</html>

@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>Admin Login — FaceAttend</title>
+  <link rel="stylesheet" href="../css/globals.css"/>
+  <link rel="stylesheet" href="../css/home.css"/>
+</head>
+<body>
+<div id="toast-container"></div>
+
+<div class="admin-login-page">
+<div class="admin-login-box">
+
+  <div class="admin-login-brand">
+    <div class="a-icon">🔐</div>
+    <h2>Admin Login</h2>
+    <p>FaceAttend Administration Panel</p>
+  </div>
+
+  <div class="admin-card">
+    <div class="form-group">
+      <label class="form-label">Email address</label>
+      <input class="form-control" id="a-email" type="email"
+        placeholder="admin@faceattend.com" autocomplete="email"/>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Password</label>
+      <div class="input-wrap">
+        <input class="form-control" id="a-pass" type="password"
+          placeholder="••••••••" autocomplete="current-password"/>
+        <button class="toggle-eye" onclick="toggleEye()" tabindex="-1">👁</button>
+      </div>
+    </div>
+    <div id="a-err" class="alert alert-error hidden" style="margin-bottom:12px"></div>
+    <button class="admin-submit" id="a-btn" onclick="doLogin()">
+      <span id="a-txt">Sign in as Admin</span>
+      <span id="a-spin" class="spinner hidden"></span>
+    </button>
+
+    <div style="margin-top:16px;padding:12px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--r-md);font-size:0.8rem;color:var(--fg2);text-align:center">
+      Default credentials<br/>
+      <code style="color:var(--accent);font-family:'JetBrains Mono',monospace">admin@faceattend.com</code>
+      &nbsp;/&nbsp;
+      <code style="color:var(--accent);font-family:'JetBrains Mono',monospace">Admin@123</code>
+    </div>
+  </div>
+
+  <a href="index.html" class="back-link">← Back to home</a>
+
+</div>
+</div>
+
+<script>
+// ── Simple vanilla JS login — no module imports needed ──────
+// This avoids any module loading issues that could cause token not to save.
+
+const BASE = "http://localhost:5000/api";
+
+function $(id) { return document.getElementById(id); }
+
+function showErr(msg) {
+  $("a-err").textContent = msg;
+  $("a-err").classList.remove("hidden");
+}
+function hideErr() { $("a-err").classList.add("hidden"); }
+
+function setBusy(busy) {
+  $("a-btn").disabled = busy;
+  $("a-txt").classList.toggle("hidden", busy);
+  $("a-spin").classList.toggle("hidden", !busy);
+}
+
+window.toggleEye = () => {
+  const el = $("a-pass");
+  el.type = el.type === "password" ? "text" : "password";
+};
+
+// Check if already logged in
+(function checkAlreadyIn() {
+  const token = localStorage.getItem("fa_token");
+  const user  = JSON.parse(localStorage.getItem("fa_user") || "null");
+  if (token && user && (user.role === "admin" || user.role === "superadmin")) {
+    console.log("[Login] Already logged in, redirecting to admin.html");
+    window.location.href = "admin.html";
+  }
+})();
+
+window.doLogin = async () => {
+  hideErr();
+  const email = $("a-email").value.trim();
+  const pass  = $("a-pass").value;
+
+  if (!email || !pass) {
+    showErr("Please enter your email and password.");
+    return;
+  }
+
+  setBusy(true);
+
+  try {
+    console.log("[Login] Attempting login for:", email);
+
+    const res = await fetch(BASE + "/auth/admin/login", {
+      method:  "POST",
+      headers: { "Content-Type": "application/json" },
+      body:    JSON.stringify({ email, password: pass }),
+    });
+
+    const data = await res.json();
+    console.log("[Login] Response status:", res.status, data);
+
+    if (!res.ok) {
+      showErr(data.message || "Login failed. Check your credentials.");
+      return;
+    }
+
+    if (!data.token) {
+      showErr("Server did not return a token. Please try again.");
+      return;
+    }
+
+    // Save token and user to localStorage
+    localStorage.setItem("fa_token", data.token);
+    localStorage.setItem("fa_user",  JSON.stringify(Object.assign({}, data.admin, { role: data.admin.role })));
+
+    console.log("[Login] ✅ Token saved:", data.token.substring(0, 30) + "…");
+    console.log("[Login] ✅ User saved:", data.admin);
+
+    // Small delay so storage is written
+    await new Promise(r => setTimeout(r, 200));
+
+    // Verify it was saved
+    const savedToken = localStorage.getItem("fa_token");
+    console.log("[Login] Verified token in storage:", savedToken ? "✅ YES" : "❌ NO");
+
+    window.location.href = "admin.html";
+
+  } catch(err) {
+    console.error("[Login] Error:", err);
+    showErr("Connection error. Is the backend running? (npm run dev)");
+  } finally {
+    setBusy(false);
+  }
+};
+
+document.addEventListener("keydown", e => {
+  if (e.key === "Enter") doLogin();
+});
+</script>
+</body>
+</html>

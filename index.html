@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>FaceAttend — Attendance System</title>
+  <link rel="stylesheet" href="../css/globals.css"/>
+  <link rel="stylesheet" href="../css/home.css"/>
+</head>
+<body>
+<div id="toast-container"></div>
+
+<div class="landing">
+
+  <!-- Brand -->
+  <div class="brand">
+    <div class="brand-mark">🎓</div>
+    <h1>Face<span>Attend</span></h1>
+    <p>AI-powered face recognition attendance system. No cards, no tokens — just your face.</p>
+  </div>
+
+  <!-- Choice cards -->
+  <div class="choice-grid">
+
+    <!-- Student -->
+    <div class="choice-card student" onclick="goStudent()">
+      <div class="choice-icon blue">📷</div>
+      <div class="choice-title">Student</div>
+      <div class="choice-desc">Mark your attendance using face recognition. No login needed.</div>
+      <div class="choice-arrow">
+        Scan my face <span>→</span>
+      </div>
+    </div>
+
+    <!-- Admin -->
+    <div class="choice-card admin" onclick="goAdmin()">
+      <div class="choice-icon purple">🔐</div>
+      <div class="choice-title">Admin</div>
+      <div class="choice-desc">Manage students, register faces, view reports and analytics.</div>
+      <div class="choice-arrow">
+        Admin login <span>→</span>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Features strip -->
+  <div class="features-strip">
+    <div class="feat-item"><div class="feat-dot"></div>Real-time face detection</div>
+    <div class="feat-item"><div class="feat-dot"></div>MongoDB database</div>
+    <div class="feat-item"><div class="feat-dot"></div>Attendance graphs</div>
+    <div class="feat-item"><div class="feat-dot"></div>JWT secured API</div>
+  </div>
+
+</div>
+
+<script>
+  function goStudent() { window.location.href = "scan.html"; }
+  function goAdmin()   { window.location.href = "admin-login.html"; }
+</script>
+</body>
+</html>
